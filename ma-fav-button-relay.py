@@ -38,7 +38,11 @@ ANN_FLOOR = 1    # voice never below this (whispers stay audible)
 LEAN_ENABLE = False  # parked 26 Oct 2026; poll loop stays dormant until True
 LEAN_STEP = 5
 LEAN_POLL_SECONDS = 2
-DIM_STEP = 2  # MA volume points per dimmer rotary step (27 Oct 2026)
+DIM_TAPER = 1.12  # per-detent volume factor, ~1 dB (6 Nov 2026).
+# Logarithmic (audio-taper) rotary: each detent multiplies/divides the
+# current MA level, so steps are fine at the bottom (+-1) and coarse at
+# the top (~+-10) - like an analogue knob. Minimum step 1 so the bottom
+# never sticks; guaranteed to reach 0 going down and leave 0 going up.
 def _dim_skip(which, dry_run=False):
     """Twist-while-pressed: next/previous track on the active queue
     (never paused first, so no resume dance is needed)."""
@@ -351,14 +355,33 @@ def handle_lean(source, dry_run=False):
     return {"volume": new, "target": target.get("name")}
 
 
-def handle_dimmer(action, steps, dry_run=False):
-    """YLKG08YL rotary: volume step scaled by event steps
-    (delta = steps * DIM_STEP) on the active device."""
+def _taper_volume(cur, action, steps):
+    """Audio-taper step: apply DIM_TAPER per detent (a multi-detent spin
+    loops, identical to turning each detent individually). Returns int."""
     try:
         steps = max(1, int(steps))
     except (TypeError, ValueError):
         steps = 1
-    delta = steps * DIM_STEP if action == "dim_up" else -steps * DIM_STEP
+    cur = float(cur)
+    for _ in range(steps):
+        if action == "dim_up":
+            if cur >= 100:
+                break
+            nxt = round(cur * DIM_TAPER)
+            cur = min(100, cur + 1 if nxt <= cur else nxt)
+        else:
+            if cur <= 0:
+                break
+            nxt = round(cur / DIM_TAPER)
+            cur = max(0, cur - 1 if nxt >= cur else nxt)
+    return int(cur)
+
+
+def handle_dimmer(action, steps, dry_run=False):
+    """YLKG08YL rotary + Zigbee knob: logarithmic (audio-taper) volume -
+    each detent scales the current level by DIM_TAPER (~1 dB), so steps
+    are +-1 at the bottom and ~+-10 at the top. Applies to both rotaries
+    (both log source=dimmer)."""
     players = ma("players/all", {}, mid="players")
     target = resolve_active(players, record_last=not dry_run)
     if target is None:
@@ -373,7 +396,7 @@ def handle_dimmer(action, steps, dry_run=False):
                      target.get("name"))
         return {"volume": None, "target": target.get("name"),
                 "dry_run": dry_run}
-    new = min(100, max(0, round(cur + delta)))
+    new = _taper_volume(cur, action, steps)
     if dry_run:
         return {"volume": new, "target": target.get("name"), "dry_run": True}
     ma("players/cmd/volume_set",

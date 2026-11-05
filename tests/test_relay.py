@@ -86,7 +86,7 @@ def _dimmer_player(monkeypatch, volume=20):
 def test_dimmer_rotate_right_scales_by_steps(monkeypatch):
     _dimmer_player(monkeypatch)
     res = relay.handle_press("dimmer", True, None, "rotate_right", 3)
-    assert res == {"volume": 26, "target": "moode-sendspin",
+    assert res == {"volume": 28, "target": "moode-sendspin",
                    "dry_run": True}
 
 
@@ -95,6 +95,44 @@ def test_dimmer_rotate_left_coerces_string_steps(monkeypatch):
     res = relay.handle_press("dimmer", True, None, "rotate_left", "2")
     assert res == {"volume": 16, "target": "moode-sendspin",
                    "dry_run": True}
+
+
+def test_dimmer_taper_is_fine_at_bottom_coarse_at_top(monkeypatch):
+    # Audio taper: +-1 at the bottom, ~+-10 at the top (x1.12, ~1 dB).
+    _dimmer_player(monkeypatch, volume=4)
+    assert relay.handle_press("dimmer", True, None,
+                              "rotate_right", 1)["volume"] == 5
+    assert relay.handle_press("dimmer", True, None,
+                              "rotate_left", 1)["volume"] == 3
+    _dimmer_player(monkeypatch, volume=90)
+    assert relay.handle_press("dimmer", True, None,
+                              "rotate_right", 1)["volume"] == 100
+    assert relay.handle_press("dimmer", True, None,
+                              "rotate_left", 1)["volume"] == 80
+
+
+def test_dimmer_taper_reaches_and_leaves_mute(monkeypatch):
+    _dimmer_player(monkeypatch, volume=0)
+    assert relay.handle_press("dimmer", True, None,
+                              "rotate_right", 1)["volume"] == 1
+    _dimmer_player(monkeypatch, volume=1)
+    assert relay.handle_press("dimmer", True, None,
+                              "rotate_left", 1)["volume"] == 0
+    _dimmer_player(monkeypatch, volume=100)
+    assert relay.handle_press("dimmer", True, None,
+                              "rotate_right", 1)["volume"] == 100
+
+
+def test_dimmer_taper_burst_matches_sequential_turns(monkeypatch):
+    _dimmer_player(monkeypatch, volume=30)
+    burst = relay.handle_press("dimmer", True, None,
+                               "rotate_right", 5)["volume"]
+    level = 30
+    for _ in range(5):
+        _dimmer_player(monkeypatch, volume=level)
+        level = relay.handle_press("dimmer", True, None,
+                                   "rotate_right", 1)["volume"]
+    assert burst == level == 54
 
 
 def test_dimmer_unknown_event_is_noop():
