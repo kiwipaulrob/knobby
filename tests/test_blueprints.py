@@ -78,11 +78,14 @@ def test_native_blueprint_inputs():
     assert top["remember_speaker"]["default"] is False
     assert "boolean" in top["remember_speaker"]["selector"]
     assert top["announce_speed"]["default"] == 1
-    # Every input must carry a default (possibly null): HA refuses to
-    # generate an automation from the blueprint when a default-less
-    # input is not provided ("Missing input ...").
+    # Every optional input must carry a default (possibly null): HA refuses
+    # to generate an automation from the blueprint when a default-less
+    # input is not provided ("Missing input ..."). Only the two mandatory
+    # inputs (mode_select, seek_latch) may lack one.
     for key, inp in top.items():
         if inp is None or "input" in inp:
+            continue
+        if key in ("mode_select", "seek_latch"):
             continue
         assert "default" in inp, key
     assert top["announce_speed"]["selector"] == {"number": {"min": 0.5,
