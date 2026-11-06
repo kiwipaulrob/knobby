@@ -9,8 +9,10 @@ BP_DIR = os.path.join(os.path.dirname(__file__), "..", "blueprints",
 GENERIC = os.path.join(BP_DIR, "zg101zd_knob_gestures.yaml")
 NATIVE = os.path.join(BP_DIR, "zg101zd_knob_ma_native.yaml")
 
-GESTURES = {"rotate_right", "rotate_left", "press", "double_press", "hold",
-            "hold_rotate_right", "hold_rotate_left"}
+GENERIC_GESTURES = {"rotate_right", "rotate_left", "press", "double_press",
+                    "hold", "hold_rotate_right", "hold_rotate_left"}
+NATIVE_GESTURES = {"volume_right", "volume_left", "press", "double_press",
+                   "hold", "seek_right", "seek_left"}
 
 
 class BlueprintLoader(yaml.SafeLoader):
@@ -37,7 +39,7 @@ def test_generic_blueprint_gestures():
     bp = load(GENERIC)
     assert bp["blueprint"]["domain"] == "automation"
     inputs = set(bp["blueprint"]["input"])
-    assert inputs == {"knob_action_topic"} | {g + "_action" for g in GESTURES}
+    assert inputs == {"knob_action_topic"} | {g + "_action" for g in GENERIC_GESTURES}
     assert bp.get("mode") == "queued" and bp.get("max") == 10
 
 
@@ -45,12 +47,17 @@ def test_native_blueprint_inputs():
     bp = load(NATIVE)
     assert bp["blueprint"]["domain"] == "automation"
     inputs = bp["blueprint"]["input"]
-    for key in ("knob_action_topic", "speakers", "memory_helper",
-                "volume_db_per_detent", "seek_seconds"):
+    for key in ("knob_action_topic", "mode_select", "speakers",
+                "memory_helper", "seek_latch", "volume_db_per_detent",
+                "seek_seconds", "seek_window"):
         assert key in inputs, key
     assert inputs["volume_db_per_detent"]["default"] == 1
     assert inputs["seek_seconds"]["default"] == 10
-    assert bp.get("mode") == "queued" and bp.get("max") == 10
+    assert inputs["seek_window"]["default"] == 2
+    # Parallel: rotation runs stay instant while a hold run waits out
+    # the seek window; the latch (not run ordering) decides seek vs
+    # volume.
+    assert bp.get("mode") == "parallel" and bp.get("max") == 10
 
 
 def test_native_blueprint_no_relay():
@@ -58,8 +65,11 @@ def test_native_blueprint_no_relay():
     for banned in ("rest_command", "http://", "8699", "ma_dimmer"):
         assert banned not in raw, banned
     for required in ("media_player.volume_set", "media_player.media_toggle",
-                     "media_player.media_next_track", "button.press",
-                     "media_player.media_seek", "last_triggered",
+                     "media_player.media_next_track",
+                     "media_player.media_previous_track",
+                     "button.press", "media_player.media_seek",
+                     "input_boolean", "wait_for_trigger", "wait.completed",
+                     "last_changed",
                      "device_entities(device_id(target))",
                      "media_position_updated_at"):
         assert required in raw, required
@@ -67,7 +77,19 @@ def test_native_blueprint_no_relay():
 
 def test_native_event_map_covers_gestures():
     bp = load(NATIVE)
-    assert set(bp["variables"]["event_map"].values()) == GESTURES
+    assert set(bp["variables"]["event_map"].values()) == NATIVE_GESTURES
+
+
+def test_native_triple_proxy_dual_edge():
+    bp = load(NATIVE)
+    triples = [t for t in bp["triggers"]
+               if isinstance(t, dict) and t.get("id") in ("triple", "triple_rev")]
+    assert len(triples) == 2
+    edges = {(t.get("from"), t.get("to")) for t in triples}
+    assert edges == {("event", "command"), ("command", "event")}
+    raw = open(NATIVE).read()
+    # No remote mode-set: the blueprint watches the select, never writes it.
+    assert "select.select_option" not in raw
 
 
 def test_memory_example_parses():

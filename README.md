@@ -156,28 +156,39 @@ One-click import — needs no Python, no service, nothing hosted:
 [![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint pre-filled.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fraw.githubusercontent.com%2Fkiwipaulrob%2Fma-fav-button%2Fmain%2Fblueprints%2Fautomation%2Fkiwipaulrob%2Fzg101zd_knob_ma_native.yaml)
 
 `blueprints/automation/kiwipaulrob/zg101zd_knob_ma_native.yaml` wires
-the same seven gestures straight to Music Assistant's native HA
-entities — no relay in the middle:
+eight gestures straight to Music Assistant's native HA
+entities — no relay in the middle (triple-press rides the Z2M
+`operation_mode` select, since it emits no MQTT action):
 
 | Gesture | Native action |
 |---|---|
-| Rotate right/left | `volume_set` with ~1 dB log taper (×/÷ 1.122 per detent) |
+| Rotate right/left | `volume_set` with ~1 dB log taper (×/÷ 1.122 per detent) — or seek while held (see below) |
 | Press | Play/pause toggle |
 | Double-press | Next track |
-| Hold | Favourite current song (per-player button entity) |
+| Triple-press | Previous track (fires twice: restart-current, then step back) |
+| Hold | Favourite current song (per-player button entity), committed ~2 s late |
 | Hold-turn right/left | `media_seek` ±N s per detent, clamped to track bounds |
 
-Before importing, create two Helpers (Settings → Devices & services
+The knob's triple-press toggles its mode instead of emitting an
+action, so the blueprint watches the mode select in both directions
+(you pick it at import; it is never written back). Hold vs
+hold-to-seek is disambiguated by gesture shape via a seek-latch
+helper — technique: press, beat, turn. Spinning the instant you press
+nudges volume for the first detent(s); the favourite waits out the
+seek window.
+
+Before importing, create three Helpers (Settings → Devices & services
 → Helpers, exact names): a **group** `ma_speakers` with your MA
-speaker `media_player` entities (no TVs, no dashboard displays), and a
-**text** `input_text.ma_active_player`. Then run
+speaker `media_player` entities (no TVs, no dashboard displays), a
+**text** `input_text.ma_active_player`, and a **boolean**
+`input_boolean.knob_seek` as the seek latch. Then run
 `examples/ma-active-player-memory.yaml` once — it tracks whichever
 speaker is playing (including A→B handoffs) so the knob follows the
 music; the memory survives restarts. Seek uses
 `media_position_updated_at` to project the live position while
 playing, and skips when the player has no duration (idle/stale).
-Volume dB-per-detent and seek seconds are blueprint inputs
-(defaults 1 dB, 10 s).
+Volume dB-per-detent, seek seconds and the hold-to-seek window are
+blueprint inputs (defaults 1 dB, 10 s, 2 s).
 
 ## Lessons encoded here (read before simplifying)
 
