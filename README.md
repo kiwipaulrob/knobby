@@ -6,10 +6,11 @@ track, **hold** favourites the current song and has a voice confirm it —
 all on *whichever Music Assistant player is currently playing*. No
 rewiring when you switch rooms; no dead buttons when players rename.
 
-Built against Music Assistant 2.10.x + Home Assistant, with a Zigbee
-(Tuya TS0041 via Zigbee2MQTT) button and an HA dashboard button as the
-two trigger sources. A small Python relay does the thinking; HA just
-forwards presses to it.
+Built against Music Assistant 2.10.x + Home Assistant, with Zigbee
+buttons via Zigbee2MQTT (a Tuya IH-K663 "Music button" for
+single/double, a HOBEIAN ZG-101ZD "knob 2" for hold) and an HA
+dashboard button as the trigger sources. A small Python relay does
+the thinking; HA just forwards presses to it.
 
 > **Status:** daily-driver code, running in production since Oct 2026.
 > The lean/tilt volume-gesture experiment in this repo is **parked**
@@ -49,6 +50,7 @@ paused web/Sendspin client looks identical to an idle one.
 | Single | Play/pause toggle on the active device's **own queue** (see lesson 2) |
 | Double | Next track on the active queue |
 | Hold / dashboard | Favourite the song + spoken confirmation, then resume the track |
+| Zigbee knob hold (knob 2) | Long-press publishes `hue_move` (twice per hold) → favourite + voice, same relay path as dimmer hold; 10 s debounce in `knob_2_hold_fav` |
 | Dimmer rotate | Volume ±(steps × 2) on the active device (YLKG08YL event) |
 | Dimmer press / long-press | Single press = instant toggle, long-press = favourite + voice |
 | Dimmer twist-while-pressed | Twist right = next track, twist left = previous (double-press is unworkable: fastest achievable pair is ~4 s apart, proven live) |
@@ -115,12 +117,19 @@ paused web/Sendspin client looks identical to an idle one.
    with `QueueEmpty` when that queue is empty (e.g. group queue empty
    while the member's own queue holds the position). Always resolve the
    queue scoped to the player first, `get_active_queue` fallback second.
-3. **Mute/fade cannot fix a lock-loss relay click.** Proven: the pause/
+3. **HA `as_timestamp(x or 0)` bricks a never-fired automation.**
+   Proven live 2026-11-06 on `knob_2_hold_fav`: with `last_triggered`
+   still `None`, the debounce template evaluated `as_timestamp(0)`,
+   which this HA version rejects — the condition errored, failed
+   closed, and the automation could never fire to set the very
+   attribute it needed. Guard with `is none` instead:
+   `{{ state_attr('…','last_triggered') is none or (now() - …).total_seconds() > 10 }}`.
+4. **Mute/fade cannot fix a lock-loss relay click.** Proven: the pause/
    resume click on a USB DAC (SMSL/XMOS muting relay) sounds identical
    through full digital silence — it's hardware, not signal. Fixed
    separately in the Sendspin client (keep the stream open on pause);
    see [sendspin-python-cli PR #304](https://github.com/Sendspin/sendspin-python-cli/pull/304).
-4. **Announcement clicks are genuine format switches.** TTS arrives as
+5. **Announcement clicks are genuine format switches.** TTS arrives as
    FLAC 48 kHz/16-bit, music as 44.1 kHz/24-bit — two real stream
    rebuilds per voice message, correct behaviour. Silencing them needs
    MA to announce at the current stream format (upstream work, not here).
