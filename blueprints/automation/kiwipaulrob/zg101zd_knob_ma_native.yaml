@@ -1,0 +1,180 @@
+blueprint:
+  name: Zigbee smart knob to Music Assistant (native, no relay)
+  description: >
+    Wire a Zigbee2MQTT smart knob (HOBEIAN / Moes ZG-101ZD and similar
+    Tuya knobs, command mode) straight to Music Assistant with no extra
+    software: no relay, no Python, no add-on, nothing to host. Rotate
+    for volume with a ~1 dB logarithmic taper, press for play/pause,
+    double-press for next track, bare hold to favourite the current
+    song, turn-while-held to seek with duration clamping.
+
+    The knob hardware separates the gestures itself. Plain turns publish
+    brightness_step_up/down (one event per detent = one taper step), a
+    press publishes toggle, a double-press publishes double, a bare hold
+    publishes hue_move (twice per hold — debounced internally), and
+    turning the knob WHILE held publishes
+    color_temperature_step_up/down. If your knob publishes
+    rotate_right/rotate_left instead, it is in event mode: triple-press
+    the knob to switch it to command mode.
+
+    Prerequisites (Helpers page): a group helper with your MA speaker
+    media_player entities (no TVs, no dashboard displays), and an
+    input_text helper holding the active player. Run the memory keeper
+    in examples/ma-active-player-memory.yaml once so the knob follows
+    whichever speaker is playing — memory survives restarts.
+
+    For announcements on hold (or any custom hold behaviour), create a
+    second automation from the generic zg101zd_knob_gestures blueprint
+    on the same MQTT topic.
+  domain: automation
+  source_url: https://github.com/kiwipaulrob/ma-fav-button/blob/main/blueprints/automation/kiwipaulrob/zg101zd_knob_ma_native.yaml
+  input:
+    knob_action_topic:
+      name: Knob action MQTT topic
+      description: >
+        Full MQTT action topic of the knob, e.g.
+        zigbee2mqtt/knob_2/action. Payloads are plain-text action
+        strings (command mode — see above).
+      default: zigbee2mqtt/knob_2/action
+    speakers:
+      name: Speaker group
+      description: >
+        Group helper containing your Music Assistant speaker
+        media_player entities. Leave TVs and dashboard displays out —
+        they are never picked as target.
+      selector:
+        entity:
+          domain: group
+    memory_helper:
+      name: Active-player memory
+      description: >
+        input_text helper written by the memory-keeper automation
+        (examples/ma-active-player-memory.yaml). Falls back to the
+        first group member when empty or stale.
+      selector:
+        entity:
+          domain: input_text
+    volume_db_per_detent:
+      name: Volume step
+      description: >
+        dB per rotation detent. 1 dB multiplies/divides the level by
+        ~1.122 each detent (logarithmic, matches human hearing).
+      default: 1
+      selector:
+        number:
+          min: 0.5
+          max: 3
+          step: 0.5
+          unit_of_measurement: dB
+    seek_seconds:
+      name: Seek step
+      description: Seconds per detent when turning while held.
+      default: 10
+      selector:
+        number:
+          min: 5
+          max: 60
+          step: 5
+          unit_of_measurement: s
+
+triggers:
+  - trigger: mqtt
+    topic: !input knob_action_topic
+
+variables:
+  event_map:
+    brightness_step_up: rotate_right
+    brightness_step_down: rotate_left
+    toggle: press
+    double: double_press
+    hue_move: hold
+    color_temperature_step_up: hold_rotate_right
+    color_temperature_step_down: hold_rotate_left
+  db_step: !input volume_db_per_detent
+  seek_step: !input seek_seconds
+  speaker_group: !input speakers
+  memory: !input memory_helper
+  members: "{{ expand(speaker_group) | map(attribute='entity_id') | list }}"
+  now_playing: "{{ expand(speaker_group) | selectattr('state','eq','playing') | map(attribute='entity_id') | list }}"
+  stored: "{{ states(memory) }}"
+  target: >
+    {% if now_playing %}{{ now_playing[0] }}
+    {% elif stored in members %}{{ stored }}
+    {% else %}{{ members[0] }}{% endif %}
+
+conditions:
+  - condition: template
+    value_template: "{{ trigger.payload in event_map }}"
+
+actions:
+  - variables:
+      gesture: "{{ event_map[trigger.payload] }}"
+  - choose:
+      - conditions: "{{ gesture == 'rotate_right' or gesture == 'rotate_left' }}"
+        sequence:
+          - variables:
+              up: "{{ gesture == 'rotate_right' }}"
+              # float(0.02): unreadable/off players start from ~2% so the
+              # first upward detent from silence always kicks audibly;
+              # multiplying up from true 0 would stay at 0 forever, so
+              # the kick also applies when the level reads exactly 0.
+              cur: "{{ state_attr(target, 'volume_level') | float(0.02) }}"
+              factor: "{{ 10 ** (db_step | float / 20) }}"
+              raw: "{{ (((cur | float) if (cur | float) > 0 else 0.02) * (factor | float) if up else ((cur | float) / (factor | float)) }}"
+              # Taper down asymptotes to zero without reaching it: snap
+              # anything below -46 dB to true 0. Clamp to [0, 1].
+              level: "{{ 0.0 if (not up and (raw | float) < 0.005) else ([[(raw | float), 0.0] | max, 1.0] | min | round(3)) }}"
+          - action: media_player.volume_set
+            target:
+              entity_id: "{{ target }}"
+            data:
+              volume_level: "{{ level }}"
+      - conditions: "{{ gesture == 'press' }}"
+        sequence:
+          - action: media_player.media_toggle
+            target:
+              entity_id: "{{ target }}"
+      - conditions: "{{ gesture == 'double_press' }}"
+        sequence:
+          - action: media_player.media_next_track
+            target:
+              entity_id: "{{ target }}"
+      - conditions:
+          - "{{ gesture == 'hold' }}"
+          # Debounce the knob's double hue_move echo. `this` is this
+          # automation's own state object, so no hardcoded entity id.
+          # WARNING: never rewrite this as as_timestamp(x or 0) — on an
+          # automation that has never fired, last_triggered is None and
+          # this HA version rejects as_timestamp(0), failing the
+          # condition closed forever.
+          - "{{ this.attributes.last_triggered is none or (now() - this.attributes.last_triggered).total_seconds() > 10 }}"
+        sequence:
+          # Favourite via the MA integration's per-player button,
+          # resolved generically through the target's device — no
+          # hardcoded button entity id to maintain.
+          - action: button.press
+            target:
+              entity_id: "{{ device_entities(device_id(target)) | select('search', 'favor') | list | first }}"
+      - conditions: "{{ gesture == 'hold_rotate_right' or gesture == 'hold_rotate_left' }}"
+        sequence:
+          - variables:
+              fwd: "{{ gesture == 'hold_rotate_right' }}"
+              pos: "{{ state_attr(target, 'media_position') | float(0) }}"
+              upd: "{{ state_attr(target, 'media_position_updated_at') }}"
+              dur: "{{ state_attr(target, 'media_duration') | float(0) }}"
+              # media_position is sampled at updated_at: project forward
+              # while playing so seeks land where the music actually is.
+              live_pos: "{% if is_state(target, 'playing') and upd %}{{ pos + (as_timestamp(now()) - as_timestamp(upd)) }}{% else %}{{ pos }}{% endif %}"
+              stepped: "{{ (live_pos | float) + (seek_step | float if fwd else -(seek_step | float)) }}"
+              seek_to: "{{ ([([stepped | float, 0.0] | max), dur | float] | min) if (dur | float > 0) else (stepped | float) }}"
+          # No duration (idle/stale player) means nowhere to seek: stop.
+          - condition: template
+            value_template: "{{ dur | float(0) > 0 }}"
+          - action: media_player.media_seek
+            target:
+              entity_id: "{{ target }}"
+            data:
+              seek_position: "{{ seek_to }}"
+
+mode: queued
+max: 10

@@ -142,6 +142,36 @@ Requires the relay running and `rest_command.ma_dimmer` configured
 lives in `examples/ha-automations.yaml` (knob section) if you prefer
 plain YAML.
 
+### Native option: no relay at all
+
+One-click import — needs no Python, no service, nothing hosted:
+
+[![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint pre-filled.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fraw.githubusercontent.com%2Fkiwipaulrob%2Fma-fav-button%2Fmain%2Fblueprints%2Fautomation%2Fkiwipaulrob%2Fzg101zd_knob_ma_native.yaml)
+
+`blueprints/automation/kiwipaulrob/zg101zd_knob_ma_native.yaml` wires
+the same seven gestures straight to Music Assistant's native HA
+entities — no relay in the middle:
+
+| Gesture | Native action |
+|---|---|
+| Rotate right/left | `volume_set` with ~1 dB log taper (×/÷ 1.122 per detent) |
+| Press | Play/pause toggle |
+| Double-press | Next track |
+| Hold | Favourite current song (per-player button entity) |
+| Hold-turn right/left | `media_seek` ±N s per detent, clamped to track bounds |
+
+Before importing, create two Helpers (Settings → Devices & services
+→ Helpers, exact names): a **group** `ma_speakers` with your MA
+speaker `media_player` entities (no TVs, no dashboard displays), and a
+**text** `input_text.ma_active_player`. Then run
+`examples/ma-active-player-memory.yaml` once — it tracks whichever
+speaker is playing (including A→B handoffs) so the knob follows the
+music; the memory survives restarts. Seek uses
+`media_position_updated_at` to project the live position while
+playing, and skips when the player has no duration (idle/stale).
+Volume dB-per-detent and seek seconds are blueprint inputs
+(defaults 1 dB, 10 s).
+
 ## Lessons encoded here (read before simplifying)
 
 1. **Announcing into a dead group plays silence with no error.**
@@ -197,8 +227,14 @@ start with the calibration table in the relay comments.
   (plain-YAML storyboard, incl. parked lean)
 - `examples/ma-gesture-wiring.yaml` — pre-wired blueprint inputs
   mapping every knob gesture to the MA relay
+- `examples/ma-active-player-memory.yaml` — active-player tracker for
+  the native (relay-free) blueprint; needs `group.ma_speakers` +
+  `input_text.ma_active_player` helpers
 - `blueprints/automation/kiwipaulrob/zg101zd_knob_gestures.yaml` —
   HA Blueprint: knob gestures → UI-picked actions (import button above)
+- `blueprints/automation/kiwipaulrob/zg101zd_knob_ma_native.yaml` —
+  HA Blueprint: knob gestures → Music Assistant natively, no relay
+  (taper volume, toggle/next, favourite, clamped seek)
 
 ## License
 
