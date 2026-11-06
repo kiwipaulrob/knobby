@@ -1,9 +1,9 @@
-# Volume knob for Music Assistant (no relay, no code)
+# Volume knob for Music Assistant
 
 Turn a Zigbee knob into a volume knob for Music Assistant: **turn** for
 volume, **press** for play/pause, **double-press** for next track,
-**triple-press** for previous, **hold** to favourite the song,
-**turn while holding** to seek through the track.
+**triple-press** for previous track, **hold** to favourite the song (with optional announcement),
+**turn while holding** to seek through the track both foreward and back.
 
 One blueprint import inside Home Assistant does it all — no Python, no
 extra service, no YAML editing. Built for the HOBEIAN ZG-101ZD and any
@@ -15,19 +15,42 @@ Zigbee2MQTT knob that sends the same actions.
 
 Each rotation detent moves the volume about **1 dB** up or down —
 logarithmic steps (×/÷ 1.122), so it feels even from whisper-quiet to
-loud, the way hearing works. The knob controls one speaker at a time,
-resolved fresh on every gesture:
+loud, the way hearing works.
 
-1. whichever of your speakers is **playing** right now,
-2. else the **last-used** speaker (optional memory keeper — see setup),
-3. else your **first-listed** speaker as fallback.
+**Setup asks you one question: which speakers may the knob touch?** Three answers:
 
-You choose the candidate set at import: the **knob's room** (default —
-whatever Music Assistant players live in the same HA room as the knob,
-no picking needed), **hand-picked players** (most-used first, since the
-order is the fallback order), or a **speaker group**. Players you never
-want touched (TVs, displays — Music Assistant exposes some as players)
-go on the never-pick list, which applies in every mode.
+- **Knob's room** (default) — whatever Music Assistant players live in the
+same HA room as the knob. No picking needed. *Example: the knob sits on
+the kitchen bench; the Kitchen Mini and Kitchen Display are in the
+Kitchen room → both are candidates.*
+- **Choose players** — hand-pick the players, most-used first, since the
+order doubles as the idle fallback order. *Example: pick the Lounge
+Soundbar first, Bedroom Mini second. When nothing is playing and
+there's no memory, the knob grabs the soundbar.*
+- **Choose a group** — one speaker-group helper holding your MA players.
+*Example: a "Downstairs" group with the kitchen and lounge players.*
+
+Players you never want touched (TVs, displays — Music Assistant exposes
+some as players) go on the **never-pick list**, which applies in every mode.
+
+**After that, every gesture picks its speaker automatically** — the knob
+drives one speaker or group at a time, resolved fresh on every gesture:
+
+1. whichever candidate is **playing** right now,
+2. else the **last-used** speaker (needs the memory helper + "Knob remembers
+last speaker" — only matters when several speakers share one knob),
+3. else the first candidate on the list.
+
+*Example: music is playing on the Bedroom Mini while you turn the kitchen
+knob → the bedroom volume moves, because "playing now" beats everything.
+Pause it and turn again with no memory set → the knob falls back to your
+first-listed speaker.*
+
+**Changed your mind later?** Nothing to redo: Settings → Automations →
+your knob automation → change the inputs → Save. New speakers, a different
+mode, memory added later — all take effect immediately, no re-import and
+no restart. Values in a mode you switched away from are kept but ignored,
+so flipping back restores your old picks.
 
 Turn the knob **while holding it** and rotations seek through the track
 instead (±10 seconds per detent, clamped to the track) — the favourite
@@ -97,12 +120,13 @@ engines ignore it. Clear the message, or leave the voice empty, for silence.
 - **Press, beat, turn.** Hold the knob, pause a beat, then turn to seek.
   Spinning the instant you press still nudges volume for the first
   detent(s) — physics beats intent at that speed.
-- **Triple-press flips the knob's mode** (event ↔ command) instead of
-  sending an action — the blueprint watches the flip in both directions
+- **Triple-press flips the knob's mode** - This is a hack but it works
+- well. Triple click is reserved by firmware to change mode (event ↔ command).
+- Instead of sending an action — the blueprint watches the flip in both directions
   and fires previous-track twice (restart-current, then step back). A
   very fast triple parses as a double (next track) instead; slow down a
   touch if previous-track misfires.
-- **Tuning** lives in a collapsed section at the bottom of the form:
+- **Tuning** lives in a collapsed section at the bottom of the blueprint form:
   volume step (default 1 dB), seek step (default 10 s), hold-to-seek
   window (default 2 s — longer is more forgiving, but the favourite
   lands that much later).
