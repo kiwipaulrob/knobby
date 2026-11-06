@@ -329,6 +329,11 @@ variables:
   # Defined AFTER target: HA evaluates variables top-down, so a
   # forward reference renders empty and tts.speak rejects it.
   ann_speaker: "{{ announce_speaker if announce_speaker else target }}"
+  # Announcement text with the track filled in. Defined after target so
+  # the media_title lookup has a speaker to read from.
+  ann_text: >-
+    {{ announce_msg | replace('{song}', state_attr(target, 'media_title') or 'the track')
+       | replace('{artist}', state_attr(target, 'media_artist') or 'unknown artist') }}
 
 conditions:
   - alias: "Knob input in a known vocabulary, and at least one candidate speaker"
@@ -497,19 +502,35 @@ actions:
                     choose:
                       - conditions: "{{ announce_msg and announce_voice and target != 'none' }}"
                         sequence:
+                          # HA validates tts.speak options against the
+                          # chosen engine and rejects the WHOLE call when
+                          # an option is unknown (e.g. Wyoming/Piper
+                          # builds that dropped length_scale). Only send
+                          # it when the speed is actually customised, and
+                          # never let a voice problem abort the gesture —
+                          # the favourite has already landed by now.
                           - alias: Speak the favourite confirmation
-                            action: tts.speak
-                            target:
-                              entity_id: "{{ announce_voice }}"
-                            data:
-                              media_player_entity_id: "{{ ann_speaker }}"
-                              # Speed as the voice's natural-pace multiple;
-                              # Piper/Wyoming reads it as length_scale
-                              # (inverse: higher length = slower speech).
-                              # Other engines ignore unknown options.
-                              options:
-                                length_scale: "{{ (1 / (announce_speed | float(1))) | round(3) }}"
-                              message: "{{ announce_msg | replace('{song}', state_attr(target, 'media_title') or 'the track') | replace('{artist}', state_attr(target, 'media_artist') or 'unknown artist') }}"
+                            choose:
+                              - alias: Custom speed
+                                conditions: "{{ (announce_speed | float(1)) != 1 }}"
+                                sequence:
+                                  - action: tts.speak
+                                    continue_on_error: true
+                                    target:
+                                      entity_id: "{{ announce_voice }}"
+                                    data:
+                                      media_player_entity_id: "{{ ann_speaker }}"
+                                      options:
+                                        length_scale: "{{ (1 / (announce_speed | float(1))) | round(3) }}"
+                                      message: "{{ ann_text }}"
+                            default:
+                              - action: tts.speak
+                                continue_on_error: true
+                                target:
+                                  entity_id: "{{ announce_voice }}"
+                                data:
+                                  media_player_entity_id: "{{ ann_speaker }}"
+                                  message: "{{ ann_text }}"
   # Diary write-back (optional, off by default): after any successful
   # gesture, record the speaker just used so the knob finds it next
   # time everything is idle. Skipped silently without a memory helper
