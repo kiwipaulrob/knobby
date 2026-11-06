@@ -300,9 +300,6 @@ variables:
   announce_voice: !input announce_voice
   announce_speaker: !input announce_speaker
   announce_speed: !input announce_speed
-  # Empty announce speaker falls back to the knob's current speaker,
-  # so the announcement follows the music like the favourite does.
-  ann_speaker: "{{ announce_speaker if announce_speaker else target }}"
   db_step: !input volume_db_per_detent
   seek_step: !input seek_seconds
   window: !input seek_window
@@ -327,6 +324,11 @@ variables:
     {% elif stored in members %}{{ stored }}
     {% elif members %}{{ members[0] }}
     {% else %}none{% endif %}
+  # Empty announce speaker falls back to the knob's current speaker,
+  # so the announcement follows the music like the favourite does.
+  # Defined AFTER target: HA evaluates variables top-down, so a
+  # forward reference renders empty and tts.speak rejects it.
+  ann_speaker: "{{ announce_speaker if announce_speaker else target }}"
 
 conditions:
   - alias: "Knob input in a known vocabulary, and at least one candidate speaker"

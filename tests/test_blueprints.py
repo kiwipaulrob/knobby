@@ -251,3 +251,12 @@ def test_native_templates_parse():
     for m in re.finditer(r"action:\s*media_player\.(\w+)", raw):
         assert m.group(1) in valid_mp, m.group(0)
 
+
+def test_variables_defined_before_use():
+    # Live bug: ann_speaker referenced target from ABOVE it; HA
+    # evaluates variables top-down, so it rendered empty and
+    # tts.speak died with "expected 'all' or 'none'".
+    bp = load(NATIVE)
+    keys = list(bp["variables"].keys())
+    assert keys.index("ann_speaker") > keys.index("target"), keys
+
