@@ -122,8 +122,11 @@ fill in the UI (rotate ×2, press, double-press, hold, hold-turn ×2).
 It works for any use — lights, scripts, anything — and knows the
 hardware's quirks: the bare-hold double `hue_move` echo is debounced
 internally via `this.attributes.last_triggered` (no hardcoded entity
-id), and the knob must be in command mode (triple-press toggles
-command/event; event mode publishes `rotate_right` instead of
+id), and triple-press only toggles command/event mode — verified
+live 7 Nov 2026 (direct MQTT capture): a fast triple parses as
+`double`, a deliberate triple emits no action, just an
+`operation_mode` event↔command flip in the state topic. There is no
+triple-click input; the gesture set stays at seven (event mode publishes `rotate_right` instead of
 `brightness_step_up`).
 
 To drive **Music Assistant**, fill the slots with `rest_command.ma_dimmer`
