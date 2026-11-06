@@ -211,8 +211,9 @@ blueprint:
         Passed to the voice as Piper/Wyoming `length_scale` (its
         inverse: higher length means slower speech), so it only affects
         Piper/Wyoming voices — other engines ignore it. 1.0 = natural
-        pace. Note: custom speeds use the HA voice path, which plays
-        MA's pre-announce chime; 1.0 stays chime-free.
+        pace. Note: speeds other than 1.0 only apply to Piper/Wyoming
+        voices (HA voice path); other engines ignore the speed and stay
+        chime-free.
       default: 1
       selector:
         number:
@@ -260,6 +261,19 @@ blueprint:
           selector:
             duration:
               enable_day: false
+        last_turn_helper:
+          name: Recent-turn stamp helper
+          description: >
+            An input_datetime the knob stamps on every rotation. A hold
+            arriving just after turns was a seek that ran long, not a
+            new favourite — without this, every press-and-rotate that
+            crosses the knob's ~3 s hold threshold favourites. Create
+            an input_datetime helper and pick it here; empty keeps the
+            old forward-watch-only behaviour.
+          default:
+          selector:
+            entity:
+              domain: input_datetime
 
 triggers:
   - trigger: mqtt
@@ -299,6 +313,10 @@ variables:
   memory: !input memory_helper
   remember: !input remember_speaker
   latch: !input seek_latch
+  # Stamp of the most recent rotation (optional helper): a hold
+  # arriving just after turns was a seek that ran long, not a new
+  # favourite. Empty keeps the old forward-watch-only behaviour.
+  turn_stamp: !input last_turn_helper
   announce_msg: !input announce_message
   announce_voice: !input announce_voice
   announce_speaker: !input announce_speaker
@@ -379,6 +397,18 @@ actions:
               - alias: "Turn while held: seek"
                 conditions: "{{ seeking }}"
                 sequence:
+                  # Stamp every turn: a hold arriving just after turns
+                  # was a seek that ran long — the hold step checks this
+                  # stamp and skips the favourite.
+                  - alias: Stamp this turn for the hold step
+                    choose:
+                      - conditions: "{{ turn_stamp }}"
+                        sequence:
+                          - action: input_datetime.set_datetime
+                            target:
+                              entity_id: "{{ turn_stamp }}"
+                            data:
+                              timestamp: "{{ now().timestamp() }}"
                   - variables:
                       pos: "{{ state_attr(target, 'media_position') | float(0) }}"
                       upd: "{{ state_attr(target, 'media_position_updated_at') }}"
@@ -401,6 +431,18 @@ actions:
               - alias: "Plain turn: volume"
                 conditions: "{{ gesture == 'volume_right' or gesture == 'volume_left' }}"
                 sequence:
+                  # Stamp every turn, seek or volume alike: a hold
+                  # arriving just after any turn was part of that
+                  # gesture, not a new favourite.
+                  - alias: Stamp this turn for the hold step
+                    choose:
+                      - conditions: "{{ turn_stamp }}"
+                        sequence:
+                          - action: input_datetime.set_datetime
+                            target:
+                              entity_id: "{{ turn_stamp }}"
+                            data:
+                              timestamp: "{{ now().timestamp() }}"
                   - variables:
                       # float(0.02): unreadable/off players start from ~2% so the
                       # first upward detent from silence always kicks audibly;
@@ -464,6 +506,24 @@ actions:
                     action: input_boolean.turn_on
                     target:
                       entity_id: "{{ latch }}"
+                  # Look back as well as forward: press-and-rotate sends
+                  # its turns BEFORE the knob's ~3 s hold threshold fires,
+                  # so a forward-only watch always misses them and every
+                  # long seek ends in a favourite. If a turn landed within
+                  # the window just before this hold, the music already
+                  # seeked (or the volume already moved) — disarm and stop:
+                  # no wait, no favourite.
+                  - alias: Skip when turns just preceded (seek, not favourite)
+                    choose:
+                      - conditions: "{{ turn_stamp and states(turn_stamp) not in ['unknown', 'unavailable', 'none', ''] and (as_timestamp(now()) - as_timestamp(states(turn_stamp))) < (win_secs | float) }}"
+                        sequence:
+                          - alias: Disarm the seek latch
+                            action: input_boolean.turn_off
+                            target:
+                              entity_id: "{{ latch }}"
+                          - alias: Stop, the turns already landed
+                            condition: template
+                            value_template: "{{ false }}"
                   # Own the whole press: if a turn follows within the
                   # window this was a seek (the rotation runs already
                   # seeked via the latch) — suppress the favourite.
@@ -510,12 +570,15 @@ actions:
                         sequence:
                           # Never let a voice problem abort the gesture —
                           # the favourite has already landed by now.
-                          # Custom speed still uses the HA voice path: only
-                          # tts.speak passes length_scale to Piper/Wyoming.
+                          # Custom speed still uses the HA voice path (only
+                          # tts.speak passes length_scale to Piper/Wyoming,
+                          # and only for Piper/Wyoming voices — other
+                          # engines such as Cloud reject length_scale, so
+                          # they use the chime-free MA call at natural pace).
                           - alias: Speak the favourite confirmation
                             choose:
-                              - alias: Custom speed (HA voice path)
-                                conditions: "{{ (announce_speed | float(1)) != 1 }}"
+                              - alias: Custom speed on Piper/Wyoming (HA voice path)
+                                conditions: "{{ (announce_speed | float(1)) != 1 and ('piper' in (announce_voice or '') or 'wyoming' in (announce_voice or '')) }}"
                                 sequence:
                                   - action: tts.speak
                                     continue_on_error: true

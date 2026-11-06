@@ -54,7 +54,8 @@ so flipping back restores your old picks.
 
 Turn the knob **while holding it** and rotations seek through the track
 instead (±10 seconds per detent, clamped to the track) — the favourite
-waits to make sure you weren't turning.
+waits to make sure you weren't turning (turns just before the hold
+count too, so a long press-and-rotate never favourites).
 
 ## Gestures
 
@@ -64,7 +65,7 @@ waits to make sure you weren't turning.
 | Press | Play / pause |
 | Double-press | Next track |
 | Triple-press | Previous track |
-| Hold | Favourite the current song (committed ~2 s after the hold, so a turn can cancel it) |
+| Hold | Favourite the current song (committed ~2 s after the hold, so a turn just before or after can cancel it) |
 | Hold + turn | Seek ±10 s per detent |
 
 ## Setup (~2 minutes)
