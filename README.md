@@ -57,7 +57,10 @@ device page (spaces become underscores — a knob called "knob" gives
 Zigbee2MQTT UI, press/turn it, and watch the Action field under Exposes
 update. (If you changed Z2M's base topic under Settings → MQTT, use
 that instead of `zigbee2mqtt`.) This comes prefilled at import —
-correct it if yours differs.
+correct it if yours differs. Zigbee2MQTT is required — the blueprint
+listens on MQTT topics, which the built-in Zigbee integration (ZHA)
+doesn't publish, so a ZHA-paired knob stays invisible to it. (Native
+ZHA support would need different triggers and isn't built yet.)
 
 **3. Create the seek latch.** Settings → Devices & services → Helpers →
 \+ Create helper → Toggle, named e.g. "Knob seek" (one per knob — a
@@ -68,10 +71,19 @@ and off by itself to tell seeking apart from volume.
 topic, the knob's `operation_mode` select (Settings → Devices → knob →
 entities — the entry ending in `operation_mode`; triple-press is the
 only thing that flips it, which is how the blueprint detects
-triple-presses), speaker source, and the latch helper from step 3.
+triple-presses), speaker source, and the latch helper from step 3 — plus the memory
+field and remember switch if several speakers share the knob (see below).
 
 **5. Turn it.** Volume should move on the playing speaker immediately —
 no restart needed (Automations → Reload only if you edit later).
+
+**More than one speaker on this knob?** Create an `input_text` helper
+(Settings → Devices & services → Helpers → + Create helper → Text),
+pick it in the memory field, and switch on "Knob remembers last
+speaker" (off by default). From then on every turn, press and hold
+writes the speaker just used into the memory, so the knob finds it
+next time everything is idle. One speaker? Skip all of this — the
+fallback already lands correctly.
 
 **6. (Optional) voice confirmation.** The announce message ships
 prefilled (`Added {song} by {artist} to favourites`); pick a voice and

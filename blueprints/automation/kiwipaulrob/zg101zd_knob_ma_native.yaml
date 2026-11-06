@@ -135,13 +135,29 @@ blueprint:
     memory_helper:
       name: Active-player memory (optional)
       description: >
-        input_text helper written by the memory-keeper automation
-        (examples/ma-active-player-memory.yaml). Leave empty to skip —
-        the knob falls back to the first candidate when nothing is
-        playing.
+        input_text helper holding the last-used speaker. The knob
+        writes it itself when "Knob remembers last speaker" below is
+        on; the memory-keeper automation
+        (examples/ma-active-player-memory.yaml) additionally catches
+        playback started outside the knob (phone app, voice). Leave
+        empty to skip — the knob falls back to the first candidate when
+        nothing is playing.
       selector:
         entity:
           domain: input_text
+    remember_speaker:
+      name: Knob remembers last speaker (optional, off by default)
+      description: >
+        When on, every gesture writes the speaker just used into the
+        memory helper above, so the knob finds it next time everything
+        is idle — the knob writes its own diary, one tiny write per
+        gesture. Needs the memory helper set; without it this does
+        nothing. Leave off with a single speaker (the fallback already
+        lands correctly) or while testing. The separate memory-keeper
+        automation stays useful for playback started outside the knob.
+      default: false
+      selector:
+        boolean:
     seek_latch:
       name: Seek latch helper
       description: >
@@ -262,6 +278,7 @@ variables:
   group_in: !input speaker_group
   excl: !input exclude_players
   memory: !input memory_helper
+  remember: !input remember_speaker
   latch: !input seek_latch
   announce_msg: !input announce_message
   announce_voice: !input announce_voice
@@ -450,6 +467,19 @@ actions:
                             data:
                               media_player_entity_id: "{{ ann_speaker }}"
                               message: "{{ announce_msg | replace('{song}', state_attr(target, 'media_title') or 'the track') | replace('{artist}', state_attr(target, 'media_artist') or 'unknown artist') }}"
+  # Diary write-back (optional, off by default): after any successful
+  # gesture, record the speaker just used so the knob finds it next
+  # time everything is idle. Skipped silently without a memory helper
+  # or when nothing resolved.
+  - alias: "Remember the speaker for next time (optional, off by default)"
+    condition: template
+    value_template: "{{ remember and memory and target != 'none' }}"
+  - alias: Write the speaker to memory
+    action: input_text.set_value
+    target:
+      entity_id: "{{ memory }}"
+    data:
+      value: "{{ target }}"
 
 # Parallel: rotation runs stay instant while a hold run waits out the
 # seek window; the latch (not run ordering) decides seek vs volume.
