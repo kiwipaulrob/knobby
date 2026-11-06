@@ -119,7 +119,7 @@ def test_native_blueprint_no_relay():
     raw = open(NATIVE).read()
     for banned in ("rest_command", "http://", "8699", "ma_dimmer"):
         assert banned not in raw, banned
-    for required in ("media_player.volume_set", "media_player.media_toggle",
+    for required in ("media_player.volume_set", "media_player.toggle",
                      "media_player.media_next_track",
                      "media_player.media_previous_track",
                      "button.press", "media_player.media_seek",
@@ -178,8 +178,10 @@ def _walk_templates(node, out):
 def test_native_templates_parse():
     """Every Jinja template in the native blueprint must compile.
 
-    pytest runs the YAML structure, but only HA compiles the templates —
-    a paren typo here ships green tests and an unavailable automation.
+    pytest checks YAML structure, but only HA compiles the templates:
+    a paren typo ships green tests and an unavailable automation.
+    A bad action name (media_toggle) ships green tests and a run that
+    dies at that step, so check the media_player actions too.
     """
     import jinja2
     bp = load(NATIVE)
@@ -189,4 +191,15 @@ def test_native_templates_parse():
     env = jinja2.Environment()
     for tpl in found:
         env.parse(tpl)
+    raw = open(NATIVE).read()
+    assert "media_toggle" not in raw
+    valid_mp = {"turn_on", "turn_off", "toggle", "volume_up", "volume_down",
+                "volume_set", "volume_mute", "media_play", "media_pause",
+                "media_play_pause", "media_stop", "media_previous_track",
+                "media_next_track", "play_media", "media_seek",
+                "select_source", "select_sound_mode", "shuffle_set",
+                "repeat_set", "clear_playlist"}
+    import re
+    for m in re.finditer(r"action:\s*media_player\.(\w+)", raw):
+        assert m.group(1) in valid_mp, m.group(0)
 

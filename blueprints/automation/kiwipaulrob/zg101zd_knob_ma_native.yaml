@@ -409,7 +409,7 @@ actions:
                 conditions: "{{ gesture == 'press' }}"
                 sequence:
                   - alias: Toggle play/pause
-                    action: media_player.media_toggle
+                    action: media_player.toggle
                     target:
                       entity_id: "{{ target }}"
               - alias: "Double-press: next track"
