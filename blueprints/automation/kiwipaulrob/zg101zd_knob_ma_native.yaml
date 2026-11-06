@@ -196,7 +196,9 @@ blueprint:
       description: >
         Which speaker says it — empty means the knob's current speaker
         (whatever the speaker choice above resolved to for this press).
-        Never a TV.
+        Must be a Music Assistant player: the confirmation goes through
+        MA's announcement service with the pre-announce chime off, which
+        only targets MA players. Never a TV.
       default:
       selector:
         entity:
@@ -209,7 +211,8 @@ blueprint:
         Passed to the voice as Piper/Wyoming `length_scale` (its
         inverse: higher length means slower speech), so it only affects
         Piper/Wyoming voices — other engines ignore it. 1.0 = natural
-        pace.
+        pace. Note: custom speeds use the HA voice path, which plays
+        MA's pre-announce chime; 1.0 stays chime-free.
       default: 1
       selector:
         number:
@@ -497,21 +500,21 @@ actions:
                   # Optional announce: the message ships prefilled and
                   # generic ({song}/{artist} become track/artist); it talks
                   # once a voice is picked, on the picked speaker or the
-                  # knob's current one.
+                  # knob's current one. Goes through MA's own announcement
+                  # service with the pre-announce chime explicitly OFF —
+                  # tts.speak routes through the same playback but always
+                  # plays MA's chime first.
                   - alias: Announce the favourite (optional)
                     choose:
                       - conditions: "{{ announce_msg and announce_voice and target != 'none' }}"
                         sequence:
-                          # HA validates tts.speak options against the
-                          # chosen engine and rejects the WHOLE call when
-                          # an option is unknown (e.g. Wyoming/Piper
-                          # builds that dropped length_scale). Only send
-                          # it when the speed is actually customised, and
-                          # never let a voice problem abort the gesture —
+                          # Never let a voice problem abort the gesture —
                           # the favourite has already landed by now.
+                          # Custom speed still uses the HA voice path: only
+                          # tts.speak passes length_scale to Piper/Wyoming.
                           - alias: Speak the favourite confirmation
                             choose:
-                              - alias: Custom speed
+                              - alias: Custom speed (HA voice path)
                                 conditions: "{{ (announce_speed | float(1)) != 1 }}"
                                 sequence:
                                   - action: tts.speak
@@ -524,13 +527,15 @@ actions:
                                         length_scale: "{{ (1 / (announce_speed | float(1))) | round(3) }}"
                                       message: "{{ ann_text }}"
                             default:
-                              - action: tts.speak
+                              - alias: Chime-free MA announcement
+                                action: music_assistant.play_announcement
                                 continue_on_error: true
                                 target:
-                                  entity_id: "{{ announce_voice }}"
+                                  entity_id: "{{ ann_speaker }}"
                                 data:
-                                  media_player_entity_id: "{{ ann_speaker }}"
+                                  tts_entity_id: "{{ announce_voice }}"
                                   message: "{{ ann_text }}"
+                                  use_pre_announce: false
   # Diary write-back (optional, off by default): after any successful
   # gesture, record the speaker just used so the knob finds it next
   # time everything is idle. Skipped silently without a memory helper

@@ -132,6 +132,8 @@ def test_native_blueprint_no_relay():
                      "exclude", "win_secs",
                      "announce_msg", "tts.speak", "{song}", "{artist}",
                      "ann_speaker", "remember_speaker",
+                     "music_assistant.play_announcement", "use_pre_announce",
+                     "tts_entity_id",
                      "input_text.set_value", "length_scale"):
         assert required in raw, required
 
