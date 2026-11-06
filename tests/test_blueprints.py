@@ -66,10 +66,11 @@ def test_native_blueprint_inputs():
     assert top["knob_action_topic"]["default"] == "zigbee2mqtt/knob/action"
     assert top["speaker_source"]["default"] == "knob_room"
     assert top["speaker_pick"]["default"] == []
-    assert top["speaker_pick"]["visible"] == {"field": "speaker_source",
-                                             "value": "pick_players"}
-    assert top["speaker_group"]["visible"] == {"field": "speaker_source",
-                                              "value": "pick_group"}
+    # No `visible` conditions: HA 2026.10's blueprint input schema rejects
+    # the key (import fails "not a valid option"), so mode scoping lives in
+    # the descriptions instead.
+    assert "visible" not in top["speaker_pick"]
+    assert "visible" not in top["speaker_group"]
     assert top["exclude_players"]["default"] == []
     assert top["announce_message"]["default"] == "Added {song} by {artist} to favourites"
     assert top["announce_voice"]["selector"] == {"entity": {"domain": "tts"}}

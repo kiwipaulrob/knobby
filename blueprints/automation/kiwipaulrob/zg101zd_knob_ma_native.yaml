@@ -96,11 +96,9 @@ blueprint:
         The MA players the knob may control. Resolution order is
         playing → remembered → this list in order, so list your
         most-used speaker first. Leave TVs and displays out, or add
-        them to Never-pick below.
+        them to Never-pick below. Only used when "Which speakers can
+        the knob control?" is set to Choose players.
       default: []
-      visible:
-        field: speaker_source
-        value: pick_players
       selector:
         entity:
           multiple: true
@@ -113,9 +111,8 @@ blueprint:
       description: >
         Group helper with your MA speaker media_players. Pairs with
         the memory keeper (examples/ma-active-player-memory.yaml).
-      visible:
-        field: speaker_source
-        value: pick_group
+        Only used when "Which speakers can the knob control?" is set
+        to Choose a group.
       selector:
         entity:
           domain: group

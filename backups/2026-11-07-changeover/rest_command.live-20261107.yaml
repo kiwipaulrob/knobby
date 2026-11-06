@@ -1,0 +1,14 @@
+
+rest_command:
+  ma_fav_button:
+    url: http://192.168.214.10:8699/fav-button
+    method: post
+    content_type: application/json
+    payload: "{\"source\": \"{{ source | default('dashboard') }}\"}"
+    timeout: 45
+  ma_dimmer:
+    url: http://192.168.214.10:8699/fav-button
+    method: post
+    content_type: application/json
+    payload: "{\"source\": \"dimmer\", \"event_type\": \"{{ event_type }}\", \"steps\": {{ steps | default(1) }} }"
+    timeout: 45

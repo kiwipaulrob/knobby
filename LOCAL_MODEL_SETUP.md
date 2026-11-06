@@ -86,10 +86,10 @@ blueprint → pick the knob blueprint.
    - room → `Knob's room (recommended)`. Nothing else to pick; the knob
      must just be assigned to its room (see above).
    - one/several → `Choose players` (field `Players`), then tick the MA
-     players most-used first. The `Players` field only appears in this
-     mode.
+     players most-used first. (The form always shows `Players` and
+     `Speaker group`; each is only used in its own mode.)
    - group → `Choose a group` (field `Speaker group`), then pick the
-     group helper. Only appears in this mode.
+     group helper.
 4. **Seek latch** (`Seek latch helper`) — required toggle. They must first
    create it: Settings → Devices & services → Helpers → + Create helper →
    Toggle, named e.g. "Knob seek" (one per knob; leave it off — the
