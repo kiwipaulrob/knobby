@@ -1,5 +1,11 @@
 # Volume knob for Music Assistant (relay version)
 
+> **Superseded.** This relay setup still works, but the
+> [relay-free blueprint](README.md) replaces it: one import, no hosted
+> code, same gestures plus triple-press previous and press-and-turn
+> seek. Use the blueprint for new setups; this page stays for existing
+> relay installs only.
+
 Turn a Zigbee knob into a volume knob for Music Assistant via a small
 Python relay: **turn** for volume, **press** for play/pause,
 **double-press** for next track, **hold** to favourite the song with a
@@ -12,9 +18,12 @@ Zigbee knob ──MQTT──→ HA automation ──rest_command──→ relay:
 
 **Which version should I use?** The
 [relay-free blueprint](README.md) does all of this with one import and
-no hosted code — prefer it for new setups. Keep this relay version if
-you already run it, or if you want its extras (dashboard buttons beside
-the knob, dry-run testing of the wiring).
+no hosted code — use it for new setups. Keep this relay version only
+if you already run it, or if you want its extras (dashboard buttons
+beside the knob, dry-run testing of the wiring). Both versions require
+Zigbee2MQTT — the gestures arrive over MQTT topics, which the built-in
+Zigbee integration (ZHA) doesn't publish, so a ZHA-paired knob works
+with neither version.
 
 ## How the volume works
 
