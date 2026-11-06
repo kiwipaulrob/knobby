@@ -161,3 +161,32 @@ def test_memory_example_parses():
     assert doc["alias"] == "MA active player memory"
     assert "input_text.ma_active_player" in yaml.safe_dump(doc)
     assert "group.ma_speakers" in yaml.safe_dump(doc)
+
+
+def _walk_templates(node, out):
+    if isinstance(node, str):
+        if "{{" in node or "{%" in node:
+            out.append(node)
+    elif isinstance(node, dict):
+        for v in node.values():
+            _walk_templates(v, out)
+    elif isinstance(node, list):
+        for v in node:
+            _walk_templates(v, out)
+
+
+def test_native_templates_parse():
+    """Every Jinja template in the native blueprint must compile.
+
+    pytest runs the YAML structure, but only HA compiles the templates —
+    a paren typo here ships green tests and an unavailable automation.
+    """
+    import jinja2
+    bp = load(NATIVE)
+    found = []
+    _walk_templates(bp, found)
+    assert len(found) > 20, found
+    env = jinja2.Environment()
+    for tpl in found:
+        env.parse(tpl)
+

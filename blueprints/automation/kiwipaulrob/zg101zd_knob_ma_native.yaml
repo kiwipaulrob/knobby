@@ -395,7 +395,7 @@ actions:
                       # the kick also applies when the level reads exactly 0.
                       cur: "{{ state_attr(target, 'volume_level') | float(0.02) }}"
                       factor: "{{ 10 ** (db_step | float / 20) }}"
-                      raw: "{{ (((cur | float) if (cur | float) > 0 else 0.02) * (factor | float) if fwd else ((cur | float) / (factor | float)) }}"
+                      raw: "{{ ((cur | float if (cur | float) > 0 else 0.02) * (factor | float) if fwd else ((cur | float) / (factor | float))) }}"
                       # Taper down asymptotes to zero without reaching it: snap
                       # anything below -46 dB to true 0. Clamp to [0, 1].
                       level: "{{ 0.0 if (not fwd and (raw | float) < 0.005) else ([[(raw | float), 0.0] | max, 1.0] | min | round(3)) }}"
