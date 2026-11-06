@@ -119,8 +119,8 @@ def test_native_blueprint_no_relay():
     raw = open(NATIVE).read()
     for banned in ("rest_command", "http://", "8699", "ma_dimmer"):
         assert banned not in raw, banned
-    for required in ("media_player.volume_set", "media_player.toggle",
-                     "media_player.media_next_track",
+    for required in ("media_player.volume_set", "media_player.media_play",
+                     "media_player.media_pause", "media_player.media_next_track",
                      "media_player.media_previous_track",
                      "button.press", "media_player.media_seek",
                      "input_boolean", "wait_for_trigger", "wait.completed",

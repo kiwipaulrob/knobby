@@ -408,10 +408,20 @@ actions:
               - alias: "Press: play/pause"
                 conditions: "{{ gesture == 'press' }}"
                 sequence:
-                  - alias: Toggle play/pause
-                    action: media_player.toggle
-                    target:
-                      entity_id: "{{ target }}"
+                  # No toggle: MA players don't all implement it, so
+                  # branch on state with the universal play/pause pair.
+                  - choose:
+                      - alias: "Pause the playing speaker"
+                        conditions: "{{ is_state(target, 'playing') }}"
+                        sequence:
+                          - action: media_player.media_pause
+                            target:
+                              entity_id: "{{ target }}"
+                    default:
+                      - alias: "Play the idle speaker"
+                        action: media_player.media_play
+                        target:
+                          entity_id: "{{ target }}"
               - alias: "Double-press: next track"
                 conditions: "{{ gesture == 'double_press' }}"
                 sequence:
