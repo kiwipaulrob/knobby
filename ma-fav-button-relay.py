@@ -37,6 +37,7 @@ ANN_FLOOR = 1    # voice never below this (whispers stay audible)
 
 LEAN_ENABLE = False  # parked 26 Oct 2026; poll loop stays dormant until True
 LEAN_STEP = 5
+SEEK_STEP = 10     # seconds per held-turn detent (knob 2, 6 Nov 2026)
 LEAN_POLL_SECONDS = 2
 DIM_TAPER = 1.12  # per-detent volume factor, ~1 dB (6 Nov 2026).
 # Logarithmic (audio-taper) rotary: each detent multiplies/divides the
@@ -406,6 +407,60 @@ def handle_dimmer(action, steps, dry_run=False):
     return {"volume": new, "target": target.get("name")}
 
 
+def handle_seek(action, steps, dry_run=False):
+    """Held-turn seek (knob 2): +-(steps x SEEK_STEP) seconds on the
+    active queue, clamped to [0, duration]. Streams without a duration
+    clamp only at 0; a failed seek logs and returns gracefully."""
+    try:
+        steps = max(1, int(steps))
+    except (TypeError, ValueError):
+        steps = 1
+    players = ma("players/all", {}, mid="players")
+    target = resolve_active(players, record_last=not dry_run)
+    if target is None:
+        logging.info("source=dimmer %s: no device", action)
+        return {"seeked": False, "reason": "no device", "dry_run": dry_run}
+    try:
+        q = ma("player_queues/get_active_queue",
+               {"player_id": target["player_id"]}, mid="queueS") or {}
+    except Exception as ex:
+        logging.info("source=dimmer %s queue FAILED %s", action,
+                     str(ex)[:100])
+        return {"seeked": False, "reason": "no queue",
+                "player": target.get("name")}
+    try:
+        pos = float(q.get("elapsed_time") or 0)
+    except (TypeError, ValueError):
+        pos = 0
+    dur = None
+    try:
+        ci = q.get("current_item") or {}
+        if ci.get("duration"):
+            dur = float(ci["duration"])
+    except (TypeError, ValueError):
+        dur = None
+    delta = SEEK_STEP * steps * (1 if action == "seek_fwd" else -1)
+    new = max(0, pos + delta)
+    if dur:
+        new = min(dur, new)
+    if dry_run:
+        return {"seeked": False, "dry_run": True,
+                "would_seek_to": round(new, 1), "from": round(pos, 1),
+                "player": target.get("name")}
+    try:
+        ma("players/cmd/seek",
+           {"player_id": target["player_id"], "position": new}, mid="seek")
+    except Exception as ex:
+        err = str(ex)[:100]
+        logging.info("source=dimmer %s FAILED %s", action, err)
+        return {"seeked": False, "reason": err,
+                "player": target.get("name")}
+    logging.info("source=dimmer %s steps=%s %s->%s player=%s", action, steps,
+                 round(pos, 1), round(new, 1), target.get("name"))
+    return {"seeked": True, "direction": action, "from": round(pos, 1),
+            "to": round(new, 1), "player": target.get("name")}
+
+
 def handle_announce(source, dry_run=False):
     """Announce the current song without favouriting: same voice rules
     (proportional level, group-aware target) and resume handling as the
@@ -471,10 +526,13 @@ def handle_press(source, dry_run=False, action=None, event_type=None,
         action = {"rotate_right": "dim_up", "rotate_left": "dim_down",
                   "rotate_right_pressed": "dim_next",
                   "rotate_left_pressed": "dim_prev",
+                  "seek_fwd": "seek_fwd", "seek_back": "seek_back",
                   "press": "toggle", "long_press": "fav"}.get(event_type)
         if action is None:
             logging.info("source=dimmer unknown event %s", event_type)
             return {"dimmer": False, "reason": "unknown event"}
+        if action in ("seek_fwd", "seek_back"):
+            return handle_seek(action, steps, dry_run)
         if action in ("dim_up", "dim_down"):
             return handle_dimmer(action, steps, dry_run)
         if action in ("dim_next", "dim_prev"):

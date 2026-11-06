@@ -51,6 +51,7 @@ paused web/Sendspin client looks identical to an idle one.
 | Double | Next track on the active queue |
 | Hold / dashboard | Favourite the song + spoken confirmation, then resume the track |
 | Zigbee knob hold (knob 2) | Long-press publishes `hue_move` (twice per hold) → favourite + voice, same relay path as dimmer hold; 10 s debounce in `knob_2_hold_fav` |
+| Knob 2 hold + turn | Twist while held publishes `color_temperature_step_up/down` → seek ±10 s per detent on the active queue (`seek_fwd`/`seek_back` in `knob_2_rotary_control`); the old held-turn track skip is gone, but knob double-press still skips |
 | Dimmer rotate | Volume ±(steps × 2) on the active device (YLKG08YL event) |
 | Dimmer press / long-press | Single press = instant toggle, long-press = favourite + voice |
 | Dimmer twist-while-pressed | Twist right = next track, twist left = previous (double-press is unworkable: fastest achievable pair is ~4 s apart, proven live) |
