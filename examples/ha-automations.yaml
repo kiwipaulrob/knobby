@@ -101,11 +101,17 @@
   max: 10
 
 # HOBEIAN ZG-101ZD Zigbee knob -> volume + seek on the active MA player.
-# The knob hardware separates the gestures itself: plain turns publish
-# brightness_step_up/down, turns WHILE HELD publish
-# color_temperature_step_up/down, a press publishes toggle, a double-press
-# publishes double, and a bare hold publishes hue_move (twice per hold).
-# Replace KNOB_ACTION_TOPIC with the knob's Z2M action topic.
+# Mode-oscillation warning (verified Nov 2026): every deliberate triple-press
+# TOGGLES the knob's operation_mode (event<->command) and remote mode-set does
+# not land on this firmware, so the knob drifts between two vocabularies.
+# Event mode speaks rotate_right/rotate_left/single/double/hold; command mode
+# speaks brightness_step_up/down, toggle, double, hue_move (+hue_stop). The map
+# keys BOTH so the knob stays usable in either mode. Event-mode press-and-turn
+# is firmware-indistinguishable from volume+hold (plain rotates + a hold once
+# the press outlasts the threshold), so seek vs favourite is disambiguated by
+# gesture shape via the two automations' last_triggered timestamps (see the
+# hold automation below). Replace KNOB_ACTION_TOPIC with the knob's Z2M action
+# topic.
 - id: knob_rotary_control
   alias: Knob rotary control (HOBEIAN ZG-101ZD)
   triggers:
@@ -113,10 +119,13 @@
     topic: KNOB_ACTION_TOPIC
   variables:
     event_map:
+      rotate_right: rotate_right
+      rotate_left: rotate_left
+      single: press
+      double: rotate_right_pressed
       brightness_step_up: rotate_right
       brightness_step_down: rotate_left
       toggle: press
-      double: rotate_right_pressed
       color_temperature_step_down: seek_back
       color_temperature_step_up: seek_fwd
   conditions:
@@ -125,27 +134,83 @@
   actions:
   - action: rest_command.ma_dimmer
     data:
-      event_type: '{{ event_map[trigger.payload] }}'
+      event_type: >
+        {% set h = state_attr('automation.knob_hold_for_favourite_hobeian_zg_101zd','last_triggered') %}
+        {% set seeking = h is not none and (now() - h).total_seconds() < 2 %}
+        {% if seeking and trigger.payload == 'rotate_right' %}seek_fwd
+        {% elif seeking and trigger.payload == 'rotate_left' %}seek_back
+        {% else %}{{ event_map[trigger.payload] }}{% endif %}
       steps: 1
   mode: queued
   max: 10
 
-# Knob hold -> favourite + voice. The knob emits hue_move twice per hold,
-# so the 10 s self-last_triggered guard debounces the echo. Replace the
-# automation entity id in the guard with your own alias's slugified id
-# (HA builds it from the ALIAS, not the id: field).
+# Knob hold -> favourite + voice, committed 2 s after the hold so a
+# press-and-turn (seek) can suppress it: the post-delay condition only commits
+# if the rotary automation has NOT fired since ~1 s before the hold (rotation
+# before or during the hold means it was a seek). The 10 s self-last_triggered
+# guard debounces the bare-hold double echo. Replace both automation entity
+# ids with your own aliases' slugified ids (HA builds them from the ALIAS,
+# not the id: field). The hold automation also fires in command mode (on
+# hue_move); command-mode press-and-turn seeks natively via
+# color_temperature_step_up/down.
 - id: knob_hold_fav
   alias: Knob hold for favourite (HOBEIAN ZG-101ZD)
   triggers:
   - trigger: mqtt
     topic: KNOB_ACTION_TOPIC
     payload: hue_move
+  - trigger: mqtt
+    topic: KNOB_ACTION_TOPIC
+    payload: hold
   conditions:
   - condition: template
     value_template: "{{ state_attr('automation.knob_hold_for_favourite_hobeian_zg_101zd','last_triggered') is none\n  or (now() - state_attr('automation.knob_hold_for_favourite_hobeian_zg_101zd','last_triggered')).total_seconds() > 10 }}"
   actions:
+  - delay: "00:00:02"
+  - condition: template
+    value_template: >
+      {% set r = state_attr('automation.knob_rotary_control_hobeian_zg_101zd','last_triggered') %}
+      {% set h = state_attr('automation.knob_hold_for_favourite_hobeian_zg_101zd','last_triggered') %}
+      {{ r is none or h is none or (r < h - timedelta(seconds=1)) }}
   - action: rest_command.ma_dimmer
     data:
       event_type: long_press
+      steps: 1
+  mode: single
+
+# Knob triple-press -> previous track (dual-edge mode-flip proxy, Nov 2026).
+# A deliberate triple emits NO action, only an operation_mode event<->command
+# flip in BOTH directions (a fast triple parses as double). Firing on BOTH
+# select edges catches every triple from either mode with no restore attempt
+# (remote mode-set does not land on this firmware). MA treats a lone previous
+# as restart-current, so the proxy fires twice ~2 s apart: the first
+# restarts, the second steps back. Replace KNOB_OPERATION_MODE_SELECT with
+# the Z2M operation_mode select entity for your knob.
+- id: knob_triple_click_proxy
+  alias: Knob triple-click for previous track (dual-edge mode-flip detect)
+  description: Triple-press emits no MQTT action but toggles operation_mode
+    event<->command. Firing on BOTH select edges gives a reliable triple-click
+    (previous track) from either mode; no remote mode-set is attempted.
+  triggers:
+  - trigger: state
+    entity_id: select.KNOB_OPERATION_MODE_SELECT
+    from: event
+    to: command
+    id: triple
+  - trigger: state
+    entity_id: select.KNOB_OPERATION_MODE_SELECT
+    from: command
+    to: event
+    id: triple_rev
+  conditions: []
+  actions:
+  - action: rest_command.ma_dimmer
+    data:
+      event_type: rotate_left_pressed
+      steps: 1
+  - delay: "00:00:02"
+  - action: rest_command.ma_dimmer
+    data:
+      event_type: rotate_left_pressed
       steps: 1
   mode: single

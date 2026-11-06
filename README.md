@@ -54,8 +54,9 @@ paused web/Sendspin client looks identical to an idle one.
 | Single | Play/pause toggle on the active device's **own queue** (see lesson 2) |
 | Double | Next track on the active queue |
 | Hold / dashboard | Favourite the song + spoken confirmation, then resume the track |
-| Zigbee knob hold (knob 2) | Long-press publishes `hue_move` (twice per hold) → favourite + voice, same relay path as dimmer hold; 10 s debounce in `knob_2_hold_fav` |
-| Knob 2 hold + turn | Twist while held publishes `color_temperature_step_up/down` → seek ±10 s per detent on the active queue (`seek_fwd`/`seek_back` in `knob_2_rotary_control`); the old held-turn track skip is gone, but knob double-press still skips |
+| Zigbee knob hold (knob 2) | Long-press publishes `hue_move`/`hold` (twice per bare hold) → favourite + voice, committed 2 s after the hold so a press-and-turn can suppress it; 10 s debounce in `knob_2_hold_fav` (see `examples/ha-automations.yaml` knob section) |
+| Knob 2 hold + turn | **Mode-dependent.** Command mode: twist while held publishes `color_temperature_step_up/down` → seek ±10 s per detent (`seek_fwd`/`seek_back`). Event mode: the firmware sends plain rotates + a `hold`, so seek vs favourite is disambiguated by gesture shape (rotary maps to seek while a hold is recent; the favourite commits only if no turn preceded it). Technique: press, beat, turn. Knob double-press still skips |
+| Knob 2 triple-press | Emits no action — toggles `operation_mode` event↔command in both directions (fast triple parses as `double`). The dual-edge proxy (`knob_triple_click_proxy` in `examples/ha-automations.yaml`) fires previous-track twice on either flip, so every triple works from either mode |
 | Dimmer rotate | Volume ±(steps × 2) on the active device (YLKG08YL event) |
 | Dimmer press / long-press | Single press = instant toggle, long-press = favourite + voice |
 | Dimmer twist-while-pressed | Twist right = next track, twist left = previous (double-press is unworkable: fastest achievable pair is ~4 s apart, proven live) |
@@ -125,9 +126,12 @@ internally via `this.attributes.last_triggered` (no hardcoded entity
 id), and triple-press only toggles command/event mode — verified
 live 7 Nov 2026 (direct MQTT capture): a fast triple parses as
 `double`, a deliberate triple emits no action, just an
-`operation_mode` event↔command flip in the state topic. There is no
-triple-click input; the gesture set stays at seven (event mode publishes `rotate_right` instead of
-`brightness_step_up`).
+`operation_mode` event↔command flip in the state topic. The blueprint
+covers seven direct gestures (event mode publishes `rotate_right` instead of
+`brightness_step_up`); triple-click is handled separately by the
+dual-edge mode-flip proxy in `examples/ha-automations.yaml`
+(`knob_triple_click_proxy` — fires previous-track on either flip
+direction, since remote mode-set does not land on this firmware).
 
 To drive **Music Assistant**, fill the slots with `rest_command.ma_dimmer`
 calls as in `examples/ma-gesture-wiring.yaml`:
