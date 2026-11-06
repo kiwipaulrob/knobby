@@ -49,10 +49,15 @@ blueprint:
     knob_action_topic:
       name: Knob action MQTT topic
       description: >
-        Full MQTT action topic of the knob, e.g.
-        zigbee2mqtt/knob_2/action. Payloads are plain-text action
-        strings in either operation mode (see above).
-      default: zigbee2mqtt/knob_2/action
+        The knob's MQTT action topic: zigbee2mqtt/<friendly-name>/action
+        using the name shown on the knob's Zigbee2MQTT device page
+        (e.g. a knob called "knob" gives zigbee2mqtt/knob/action —
+        spaces in the name appear as underscores). To confirm: open the
+        knob in the Zigbee2MQTT UI and press it — the Action field under
+        Exposes updates with each press. If you changed Z2M's base topic
+        (Settings → MQTT), use that instead of zigbee2mqtt. Payloads are
+        plain-text action strings in either operation mode (see above).
+      default: zigbee2mqtt/knob/action
       selector:
         text:
     mode_select:
@@ -63,7 +68,10 @@ blueprint:
         it only flips this select event<->command — so the blueprint
         fires on BOTH flip directions. The blueprint never writes it.
         Room mode reads the knob's room from this entity, so the knob
-        must be assigned to its room (Settings → Devices).
+        must be assigned to its room (Settings → Devices). Find it at
+        Settings → Devices → your knob → entities (the one ending in
+        operation_mode): every Z2M device gets one, and triple-clicking
+        the knob is the only thing that flips it.
       selector:
         entity:
           domain: select
@@ -138,21 +146,25 @@ blueprint:
       name: Seek latch helper
       description: >
         input_boolean helper that arms seek mode while the knob is
-        held (e.g. input_boolean.knob_seek — one per knob). Rotations
-        while it is on seek instead of changing volume; the hold
-        branch clears it. Reads are time-bounded, so a latch stuck on
-        by a restart self-heals after the seek window.
+        held — one per knob. Create it first: Settings → Devices &
+        services → Helpers → + Create helper → Toggle, named e.g.
+        "Knob seek" (a second knob gets its own, e.g. "Knob 2 seek").
+        Leave it off; the blueprint switches it on and off by itself.
+        Rotations while it is on seek instead of changing volume.
+        Reads are time-bounded, so a latch stuck on by a restart
+        self-heals after the seek window.
       selector:
         entity:
           domain: input_boolean
     announce_message:
       name: Announce message (optional)
       description: >
-        Said aloud after a hold favourites the song. {song} is
-        replaced with the track name — e.g. the default reads
-        "Added Dreams to favourites". Clear it for silence; the voice
-        and speaker below decide whether it talks at all.
-      default: "Added {song} to favourites"
+        Said aloud after a hold favourites the song. {song} becomes
+        the track name and {artist} the artist — e.g. the default reads
+        "Added Dreams by Fleetwood Mac to favourites" (missing names
+        degrade gracefully). Clear it for silence; the voice below and
+        a speaker decide whether it talks at all.
+      default: "Added {song} by {artist} to favourites"
       selector:
         text:
     announce_voice:
@@ -166,8 +178,9 @@ blueprint:
     announce_speaker:
       name: Announce speaker (optional)
       description: >
-        Which speaker says it. Empty = silent, even with a message
-        above. Never a TV.
+        Which speaker says it — empty means the knob's current speaker
+        (whatever the speaker choice above resolved to for this press).
+        Never a TV.
       selector:
         entity:
           domain: media_player
@@ -253,6 +266,9 @@ variables:
   announce_msg: !input announce_message
   announce_voice: !input announce_voice
   announce_speaker: !input announce_speaker
+  # Empty announce speaker falls back to the knob's current speaker,
+  # so the announcement follows the music like the favourite does.
+  ann_speaker: "{{ announce_speaker if announce_speaker else target }}"
   db_step: !input volume_db_per_detent
   seek_step: !input seek_seconds
   window: !input seek_window
@@ -420,19 +436,20 @@ actions:
                     target:
                       entity_id: "{{ device_entities(device_id(target)) | select('search', 'favor') | list | first }}"
                   # Optional announce: the message ships prefilled and
-                  # generic ({song} becomes the track name); it talks
-                  # only once a voice AND a speaker are picked.
+                  # generic ({song}/{artist} become track/artist); it talks
+                  # once a voice is picked, on the picked speaker or the
+                  # knob's current one.
                   - alias: Announce the favourite (optional)
                     choose:
-                      - conditions: "{{ announce_msg and announce_voice and announce_speaker }}"
+                      - conditions: "{{ announce_msg and announce_voice and target != 'none' }}"
                         sequence:
                           - alias: Speak the favourite confirmation
                             action: tts.speak
                             target:
                               entity_id: "{{ announce_voice }}"
                             data:
-                              media_player_entity_id: "{{ announce_speaker }}"
-                              message: "{{ announce_msg | replace('{song}', state_attr(target, 'media_title') or 'the track') }}"
+                              media_player_entity_id: "{{ ann_speaker }}"
+                              message: "{{ announce_msg | replace('{song}', state_attr(target, 'media_title') or 'the track') | replace('{artist}', state_attr(target, 'media_artist') or 'unknown artist') }}"
 
 # Parallel: rotation runs stay instant while a hold run waits out the
 # seek window; the latch (not run ordering) decides seek vs volume.

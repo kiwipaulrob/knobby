@@ -180,8 +180,13 @@ also flip the mode — verify on install.
 
 Setup takes ~2 minutes at import. **1)** Assign the knob to its room
 in HA (Settings → Devices) — room mode reads it from the mode
-select. **2)** Create one `input_boolean` helper as the seek latch
-(e.g. `input_boolean.knob_seek`, one per knob). **3)** Pick the
+select. Note the knob's MQTT action topic too:
+`zigbee2mqtt/<name>/action` using the name on its Zigbee2MQTT device
+page (spaces as underscores — press the knob and watch Exposes →
+Action to confirm). **2)** Create one `input_boolean` Toggle helper
+per knob (Settings → Devices & services → Helpers → + Create helper
+→ Toggle, e.g. `input_boolean.knob_seek`) as the seek latch; leave it
+off — the blueprint drives it itself. **3)** Pick the
 speaker source: the knob's room (default — MA players in the knob's
 room, no extra picking), hand-picked players (MA-filtered list, most-
 used first — the fallback when nothing plays), or a group (pairs with
@@ -197,11 +202,12 @@ position while playing, and skips when the player has no duration
 in a collapsed Tuning section (defaults 1 dB, 10 s, 2 s).
 
 Holds can announce: the message box ships prefilled with
-`Added {song} to favourites` ({song} becomes the track name, or "the
-track" if the player reports none). Pick a voice (e.g. tts.piper) and
-a speaker and it talks after each favourite; clear the message — or
-leave the voice/speaker empty — for silence. No YAML, no action
-editor. Requires HA 2024.6.0+ (input sections); tested on 2026.10.4.
+`Added {song} by {artist} to favourites` ({song}/{artist} become the
+track and artist, degrading gracefully when the player reports
+none). Pick a voice (e.g. tts.piper) and it talks after each
+favourite — on the picked speaker, or the knob's current speaker when
+the speaker box is left empty. Clear the message — or leave the voice
+empty — for silence. No YAML, no action editor. Requires HA 2024.6.0+ (input sections); tested on 2026.10.4.
 
 ## Lessons encoded here (read before simplifying)
 
