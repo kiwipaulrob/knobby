@@ -99,3 +99,53 @@
       steps: "{{ trigger.to_state.attributes.steps | default(1) }}"
   mode: queued
   max: 10
+
+# HOBEIAN ZG-101ZD Zigbee knob -> volume + seek on the active MA player.
+# The knob hardware separates the gestures itself: plain turns publish
+# brightness_step_up/down, turns WHILE HELD publish
+# color_temperature_step_up/down, a press publishes toggle, a double-press
+# publishes double, and a bare hold publishes hue_move (twice per hold).
+# Replace KNOB_ACTION_TOPIC with the knob's Z2M action topic.
+- id: knob_rotary_control
+  alias: Knob rotary control (HOBEIAN ZG-101ZD)
+  triggers:
+  - trigger: mqtt
+    topic: KNOB_ACTION_TOPIC
+  variables:
+    event_map:
+      brightness_step_up: rotate_right
+      brightness_step_down: rotate_left
+      toggle: press
+      double: rotate_right_pressed
+      color_temperature_step_down: seek_back
+      color_temperature_step_up: seek_fwd
+  conditions:
+  - condition: template
+    value_template: '{{ trigger.payload in event_map }}'
+  actions:
+  - action: rest_command.ma_dimmer
+    data:
+      event_type: '{{ event_map[trigger.payload] }}'
+      steps: 1
+  mode: queued
+  max: 10
+
+# Knob hold -> favourite + voice. The knob emits hue_move twice per hold,
+# so the 10 s self-last_triggered guard debounces the echo. Replace the
+# automation entity id in the guard with your own alias's slugified id
+# (HA builds it from the ALIAS, not the id: field).
+- id: knob_hold_fav
+  alias: Knob hold for favourite (HOBEIAN ZG-101ZD)
+  triggers:
+  - trigger: mqtt
+    topic: KNOB_ACTION_TOPIC
+    payload: hue_move
+  conditions:
+  - condition: template
+    value_template: "{{ state_attr('automation.knob_hold_for_favourite_hobeian_zg_101zd','last_triggered') is none\n  or (now() - state_attr('automation.knob_hold_for_favourite_hobeian_zg_101zd','last_triggered')).total_seconds() > 10 }}"
+  actions:
+  - action: rest_command.ma_dimmer
+    data:
+      event_type: long_press
+      steps: 1
+  mode: single
