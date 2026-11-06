@@ -113,6 +113,7 @@ blueprint:
         the memory keeper (examples/ma-active-player-memory.yaml).
         Only used when "Which speakers can the knob control?" is set
         to Choose a group.
+      default:
       selector:
         entity:
           domain: group
@@ -139,6 +140,7 @@ blueprint:
         playback started outside the knob (phone app, voice). Leave
         empty to skip — the knob falls back to the first candidate when
         nothing is playing.
+      default:
       selector:
         entity:
           domain: input_text
@@ -185,6 +187,7 @@ blueprint:
       description: >
         Which voice says it (e.g. tts.piper). Empty = silent, even
         with a message above.
+      default:
       selector:
         entity:
           domain: tts
@@ -194,6 +197,7 @@ blueprint:
         Which speaker says it — empty means the knob's current speaker
         (whatever the speaker choice above resolved to for this press).
         Never a TV.
+      default:
       selector:
         entity:
           domain: media_player
