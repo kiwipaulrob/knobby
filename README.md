@@ -94,11 +94,19 @@ ZHA support would need different triggers and isn't built yet.)
 second knob gets its own). Leave it off; the blueprint switches it on
 and off by itself to tell seeking apart from volume.
 
+**3b. Create the recent-turn stamp.** Same Helpers screen → + Create
+helper → Date and/or time (needs both), named e.g. "Knob last turn".
+The blueprint stamps it on every rotation so a hold arriving just
+after turns is recognised as a seek, not a favourite — leave it unset
+and only turns *after* the hold cancel the favourite (the old,
+bug-prone behaviour).
+
 **4. Import the blueprint** (badge above) and fill the form: action
 topic, the knob's `operation_mode` select (Settings → Devices → knob →
 entities — the entry ending in `operation_mode`; triple-press is the
 only thing that flips it, which is how the blueprint detects
-triple-presses), speaker source, and the latch helper from step 3 — plus the memory
+triple-presses), speaker source, the latch helper from step 3 and the
+stamp helper from step 3b (down in Tuning) — plus the memory
 field and remember switch if several speakers share the knob (see below).
 
 **5. Turn it.** Volume should move on the playing speaker immediately —
@@ -113,9 +121,10 @@ next time everything is idle. One speaker? Skip all of this — the
 fallback already lands correctly.
 
 **6. (Optional) voice confirmation.** The announce message ships
-prefilled (`Added {song} by {artist} to favourites`); pick a voice and
-it speaks after each favourite — on the picked speaker, or the knob's
-current speaker if that box is empty. A speed slider (0.5×–1.5×,
+prefilled (`Added {song} by {artist} to favourites`); the voice ships
+empty, which means silence — pick a voice and it speaks after each
+favourite, with no pre-announce chime, on the picked speaker or the
+knob's current speaker if that box is empty. A speed slider (0.5×–1.5×,
 natural pace by default) slows or quickens Piper voices — other
 engines ignore it. Clear the message, or leave the voice empty, for silence.
 
@@ -133,7 +142,8 @@ engines ignore it. Clear the message, or leave the voice empty, for silence.
 - **Tuning** lives in a collapsed section at the bottom of the blueprint form:
   volume step (default 1 dB), seek step (default 10 s), hold-to-seek
   window (default 2 s — longer is more forgiving, but the favourite
-  lands that much later).
+  lands that much later), and the recent-turn stamp helper from step
+  3b (empty = old forward-watch-only behaviour).
 
 ## Troubleshooting
 
@@ -141,8 +151,10 @@ engines ignore it. Clear the message, or leave the voice empty, for silence.
   most common cause. Re-check it against the Z2M device page.
 - **Wrong speaker moves:** the knob is in the wrong HA room, or a TV /
   display needs adding to never-pick.
-- **Holding favourites when you meant to seek:** you turned too fast
-  after pressing — press, beat, turn.
+- **Holding favourites when you meant to seek:** the last turn went
+  stale — keep turning into the hold (turns just before it count), or
+  check the recent-turn stamp helper is set (step 3b); without it only
+  turns *after* the hold cancel the favourite.
 - **Announce stays silent:** no voice picked, or the message box was
   cleared. Both are valid "off switches".
 - **Needs HA 2024.6.0+** (input sections on the form).
