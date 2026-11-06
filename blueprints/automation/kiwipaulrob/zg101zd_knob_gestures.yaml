@@ -1,0 +1,119 @@
+blueprint:
+  name: Zigbee smart knob gestures (ZG-101ZD / Moes via Z2M)
+  description: >
+    Turn the raw MQTT action strings of a Zigbee2MQTT smart knob
+    (HOBEIAN / Moes ZG-101ZD and similar Tuya knobs, command mode)
+    into per-gesture actions you pick in the UI: rotate for volume,
+    press for play/pause, double-press for next, bare hold for your
+    hold action, and turn-while-held for seek/skip. The knob hardware
+    separates the gestures itself — no value tracking needed.
+
+    Plain turns publish brightness_step_up/down, a press publishes
+    toggle, a double-press publishes double, a bare hold publishes
+    hue_move (twice per hold — debounced internally), and turning the
+    knob WHILE held publishes color_temperature_step_up/down.
+    If your knob publishes rotate_right/rotate_left instead, it is in
+    event mode: triple-press the knob to switch it to command mode.
+  domain: automation
+  source_url: https://github.com/kiwipaulrob/ma-fav-button/blob/main/blueprints/automation/kiwipaulrob/zg101zd_knob_gestures.yaml
+  input:
+    knob_action_topic:
+      name: Knob action MQTT topic
+      description: >
+        Full MQTT action topic of the knob, e.g.
+        zigbee2mqtt/knob_2/action. Payloads are plain-text action
+        strings (command mode — see above).
+      default: zigbee2mqtt/knob_2/action
+    rotate_right_action:
+      name: Rotate right
+      description: Runs on every clockwise detent (volume up).
+      default: []
+      selector:
+        action: {}
+    rotate_left_action:
+      name: Rotate left
+      description: Runs on every counter-clockwise detent (volume down).
+      default: []
+      selector:
+        action: {}
+    press_action:
+      name: Single press
+      description: Runs on a plain knob press (toggle).
+      default: []
+      selector:
+        action: {}
+    double_press_action:
+      name: Double press
+      description: Runs on a double-press (next track).
+      default: []
+      selector:
+        action: {}
+    hold_action:
+      name: Hold
+      description: >
+        Runs on a bare hold (favourite, lights scene, anything).
+        The knob emits hue_move twice per hold; the second echo is
+        suppressed with a 10 s self-debounce, no entity id needed.
+      default: []
+      selector:
+        action: {}
+    hold_rotate_right_action:
+      name: Turn right while held
+      description: Runs per clockwise detent while held (seek forward).
+      default: []
+      selector:
+        action: {}
+    hold_rotate_left_action:
+      name: Turn left while held
+      description: Runs per counter-clockwise detent while held (seek back).
+      default: []
+      selector:
+        action: {}
+
+triggers:
+  - trigger: mqtt
+    topic: !input knob_action_topic
+
+variables:
+  event_map:
+    brightness_step_up: rotate_right
+    brightness_step_down: rotate_left
+    toggle: press
+    double: double_press
+    hue_move: hold
+    color_temperature_step_up: hold_rotate_right
+    color_temperature_step_down: hold_rotate_left
+
+conditions:
+  - condition: template
+    value_template: "{{ trigger.payload in event_map }}"
+
+actions:
+  - variables:
+      gesture: "{{ event_map[trigger.payload] }}"
+  - choose:
+      - conditions: "{{ gesture == 'rotate_right' }}"
+        sequence: !input rotate_right_action
+      - conditions: "{{ gesture == 'rotate_left' }}"
+        sequence: !input rotate_left_action
+      - conditions: "{{ gesture == 'press' }}"
+        sequence: !input press_action
+      - conditions: "{{ gesture == 'double_press' }}"
+        sequence: !input double_press_action
+      - conditions:
+          - "{{ gesture == 'hold' }}"
+          # Debounce the knob's double hue_move echo. `this` is this
+          # automation's own state object, so no hardcoded entity id.
+          # WARNING: never rewrite this as as_timestamp(x or 0) — on an
+          # automation that has never fired, last_triggered is None and
+          # this HA version rejects as_timestamp(0), failing the
+          # condition closed forever.
+          - "{{ this.attributes.last_triggered is none or (now() - this.attributes.last_triggered).total_seconds() > 10 }}"
+        sequence: !input hold_action
+      - conditions: "{{ gesture == 'hold_rotate_right' }}"
+        sequence: !input hold_rotate_right_action
+      - conditions: "{{ gesture == 'hold_rotate_left' }}"
+        sequence: !input hold_rotate_left_action
+
+mode: queued
+max: 10

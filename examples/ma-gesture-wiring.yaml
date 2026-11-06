@@ -1,0 +1,48 @@
+# Pre-wired automation built FROM the knob-gestures blueprint, mapping every
+# gesture to the Music Assistant relay in this repo. Import the blueprint
+# first (see README "Home Assistant Blueprint"), then create an automation
+# from it and paste the inputs below — or wire the gestures in the UI.
+#
+# Prerequisites: relay running + rest_command.ma_dimmer configured
+# (examples/configuration-rest-command.yaml). Replace the topic with the
+# knob's own Z2M action topic.
+alias: Knob gestures to Music Assistant
+use_blueprint:
+  path: kiwipaulrob/zg101zd_knob_gestures.yaml
+  input:
+    knob_action_topic: zigbee2mqtt/knob 2/action
+    rotate_right_action:
+      - action: rest_command.ma_dimmer
+        data:
+          event_type: rotate_right
+          steps: 1
+    rotate_left_action:
+      - action: rest_command.ma_dimmer
+        data:
+          event_type: rotate_left
+          steps: 1
+    press_action:
+      - action: rest_command.ma_dimmer
+        data:
+          event_type: press
+          steps: 1
+    double_press_action:
+      - action: rest_command.ma_dimmer
+        data:
+          event_type: rotate_right_pressed
+          steps: 1
+    hold_action:
+      - action: rest_command.ma_dimmer
+        data:
+          event_type: long_press
+          steps: 1
+    hold_rotate_right_action:
+      - action: rest_command.ma_dimmer
+        data:
+          event_type: seek_fwd
+          steps: 1
+    hold_rotate_left_action:
+      - action: rest_command.ma_dimmer
+        data:
+          event_type: seek_back
+          steps: 1

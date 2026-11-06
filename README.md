@@ -12,6 +12,10 @@ single/double, a HOBEIAN ZG-101ZD "knob 2" for hold) and an HA
 dashboard button as the trigger sources. A small Python relay does
 the thinking; HA just forwards presses to it.
 
+![HOBEIAN ZG-101ZD smart knob](https://www.zigbee2mqtt.io/images/devices/ZG-101Z-D.png)
+*The HOBEIAN / Moes ZG-101ZD knob — image: zigbee2mqtt.io device
+database. Send a photo of your own knob and it goes here.*
+
 > **Status:** daily-driver code, running in production since Oct 2026.
 > The lean/tilt volume-gesture experiment in this repo is **parked**
 > (documented below) — everything else is live.
@@ -99,11 +103,44 @@ paused web/Sendspin client looks identical to an idle one.
    (`rest_command` has no reload service; stage everything first).
 6. Add the automation (`examples/ha-automations.yaml`) and hit
    **Automations → Reload** (no restart needed for automations).
+   Using a ZG-101ZD-style knob? Prefer the **Blueprint** below.
 7. Dry-run test:
    ```bash
    curl -X POST localhost:8699/fav-button \
      -d '{"source":"single","dry_run":true}'
    ```
+
+## Home Assistant Blueprint (ZG-101ZD knob)
+
+One-click import — no YAML editing for the knob side:
+
+[![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint pre-filled.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fraw.githubusercontent.com%2Fkiwipaulrob%2Fma-fav-button%2Fmain%2Fblueprints%2Fautomation%2Fkiwipaulrob%2Fzg101zd_knob_gestures.yaml)
+
+`blueprints/automation/kiwipaulrob/zg101zd_knob_gestures.yaml` turns the
+knob's raw MQTT action strings into seven per-gesture action slots you
+fill in the UI (rotate ×2, press, double-press, hold, hold-turn ×2).
+It works for any use — lights, scripts, anything — and knows the
+hardware's quirks: the bare-hold double `hue_move` echo is debounced
+internally via `this.attributes.last_triggered` (no hardcoded entity
+id), and the knob must be in command mode (triple-press toggles
+command/event; event mode publishes `rotate_right` instead of
+`brightness_step_up`).
+
+To drive **Music Assistant**, fill the slots with `rest_command.ma_dimmer`
+calls as in `examples/ma-gesture-wiring.yaml`:
+
+| Gesture | `event_type` | Relay action |
+|---|---|---|
+| Rotate right/left | `rotate_right` / `rotate_left` | Volume ± (log taper) |
+| Press | `press` | Play/pause toggle |
+| Double-press | `rotate_right_pressed` | Next track |
+| Hold | `long_press` | Favourite + voice |
+| Hold-turn right/left | `seek_fwd` / `seek_back` | Seek ±10 s per detent |
+
+Requires the relay running and `rest_command.ma_dimmer` configured
+(steps 1–5 above). The storyboard version of these two automations
+lives in `examples/ha-automations.yaml` (knob section) if you prefer
+plain YAML.
 
 ## Lessons encoded here (read before simplifying)
 
@@ -156,7 +193,12 @@ start with the calibration table in the relay comments.
   empty-queue guard, dry-run purity); run `python3 -m pytest tests/ -q`
 - `examples/ma-fav-button.service` — systemd unit
 - `examples/configuration-rest-command.yaml` — HA `rest_command`
-- `examples/ha-automations.yaml` — button automation (+ parked lean)
+- `examples/ha-automations.yaml` — button + dimmer + knob automations
+  (plain-YAML storyboard, incl. parked lean)
+- `examples/ma-gesture-wiring.yaml` — pre-wired blueprint inputs
+  mapping every knob gesture to the MA relay
+- `blueprints/automation/kiwipaulrob/zg101zd_knob_gestures.yaml` —
+  HA Blueprint: knob gestures → UI-picked actions (import button above)
 
 ## License
 
