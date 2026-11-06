@@ -166,7 +166,7 @@ entities — no relay in the middle (triple-press rides the Z2M
 | Press | Play/pause toggle |
 | Double-press | Next track |
 | Triple-press | Previous track (fires twice: restart-current, then step back) |
-| Hold | Favourite current song (per-player button entity), committed ~2 s late |
+| Hold | Favourite current song (per-player button entity), committed after the seek window |
 | Hold-turn right/left | `media_seek` ±N s per detent, clamped to track bounds |
 
 The knob's triple-press toggles its mode instead of emitting an
@@ -175,20 +175,33 @@ action, so the blueprint watches the mode select in both directions
 hold-to-seek is disambiguated by gesture shape via a seek-latch
 helper — technique: press, beat, turn. Spinning the instant you press
 nudges volume for the first detent(s); the favourite waits out the
-seek window.
+seek window. A fast triple parses as `double` (next track) and may
+also flip the mode — verify on install.
 
-Before importing, create three Helpers (Settings → Devices & services
-→ Helpers, exact names): a **group** `ma_speakers` with your MA
-speaker `media_player` entities (no TVs, no dashboard displays), a
-**text** `input_text.ma_active_player`, and a **boolean**
-`input_boolean.knob_seek` as the seek latch. Then run
-`examples/ma-active-player-memory.yaml` once — it tracks whichever
-speaker is playing (including A→B handoffs) so the knob follows the
-music; the memory survives restarts. Seek uses
-`media_position_updated_at` to project the live position while
-playing, and skips when the player has no duration (idle/stale).
-Volume dB-per-detent, seek seconds and the hold-to-seek window are
-blueprint inputs (defaults 1 dB, 10 s, 2 s).
+Setup takes ~2 minutes at import. **1)** Assign the knob to its room
+in HA (Settings → Devices) — room mode reads it from the mode
+select. **2)** Create one `input_boolean` helper as the seek latch
+(e.g. `input_boolean.knob_seek`, one per knob). **3)** Pick the
+speaker source: the knob's room (default — MA players in the knob's
+room, no extra picking), hand-picked players (MA-filtered list, most-
+used first — the fallback when nothing plays), or a group (pairs with
+the memory keeper below). **4)** Optionally list players the knob
+must never touch (TVs, displays) — Music Assistant exposes some of
+these as players, so this exclusion applies in every mode. **5)**
+Optionally point the memory at an `input_text` written by
+`examples/ma-active-player-memory.yaml` (tracks whichever speaker is
+playing, including A→B handoffs, survives restarts), or leave it empty
+to skip. Seek uses `media_position_updated_at` to project the live
+position while playing, and skips when the player has no duration
+(idle/stale). Volume step, seek step and the hold-to-seek window live
+in a collapsed Tuning section (defaults 1 dB, 10 s, 2 s).
+
+Holds can announce: the optional Announce box takes any action and
+runs it after the favourite lands, with the knob's current speaker
+available as `target` — e.g. a TTS
+`Added {{ state_attr(target, 'media_title') }} to favourites`.
+Leave it empty for silence; the description carries a paste-ready
+example. Requires HA 2024.6.0+ (input sections); tested on 2026.10.4.
 
 ## Lessons encoded here (read before simplifying)
 

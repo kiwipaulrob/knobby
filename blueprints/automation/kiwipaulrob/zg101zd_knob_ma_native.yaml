@@ -9,6 +9,16 @@ blueprint:
     favourite the current song, turn-while-held to seek with duration
     clamping.
 
+    **Setup (2 minutes):** 1) Assign the knob to its room in HA
+    (Settings → Devices) — room mode reads it from the mode select
+    below. 2) Create one `input_boolean` helper as the seek latch
+    (e.g. `input_boolean.knob_seek`, one per knob). 3) Pick the speaker
+    source: the knob's room (default), hand-picked players, or a group.
+    4) Optionally list players the knob must never touch (TVs,
+    displays) — applies in every mode. 5) Optionally point the memory
+    at an `input_text` (memory keeper in
+    `examples/ma-active-player-memory.yaml`) or leave it empty to skip.
+
     Every deliberate triple-press TOGGLES the knob's operation_mode
     (event<->command) instead of emitting an action — verified live
     Nov 2026 — so the blueprint watches BOTH flip directions and never
@@ -26,17 +36,15 @@ blueprint:
     Residuals: the favourite lands ~2 s late; spinning the instant you
     press nudges volume for the first detent(s) before the hold
     registers; within the window after a favourite-hold, turns seek
-    instead of voluming.
+    instead of voluming. A fast triple parses as `double` (next track)
+    and may ALSO flip the mode (previous) — verify on install.
 
-    Prerequisites (Helpers page): a group helper with your MA speaker
-    media_player entities (no TVs, no dashboard displays), an
-    input_text helper holding the active player, and an input_boolean
-    helper as the seek latch (e.g. input_boolean.knob_seek — one per
-    knob). Run the memory keeper in
-    examples/ma-active-player-memory.yaml once so the knob follows
-    whichever speaker is playing — memory survives restarts.
+    Tested on HA 2026.10.4. Minimum version 2024.6.0 (input sections).
   domain: automation
   source_url: https://github.com/kiwipaulrob/ma-fav-button/blob/main/blueprints/automation/kiwipaulrob/zg101zd_knob_ma_native.yaml
+  author: kiwipaulrob
+  homeassistant:
+    min_version: 2024.6.0
   input:
     knob_action_topic:
       name: Knob action MQTT topic
@@ -45,6 +53,8 @@ blueprint:
         zigbee2mqtt/knob_2/action. Payloads are plain-text action
         strings in either operation mode (see above).
       default: zigbee2mqtt/knob_2/action
+      selector:
+        text:
     mode_select:
       name: Knob operation-mode select
       description: >
@@ -52,24 +62,75 @@ blueprint:
         select.knob_2_operation_mode). Triple-press emits no action —
         it only flips this select event<->command — so the blueprint
         fires on BOTH flip directions. The blueprint never writes it.
+        Room mode reads the knob's room from this entity, so the knob
+        must be assigned to its room (Settings → Devices).
       selector:
         entity:
           domain: select
-    speakers:
+    speaker_source:
+      name: Which speakers can the knob control?
+      description: >
+        Knob's room follows the room the knob itself is assigned to
+        (no extra picking). Choose players/groups to curate manually.
+      default: knob_room
+      selector:
+        select:
+          options:
+            - label: Knob's room (recommended)
+              value: knob_room
+            - label: Choose players
+              value: pick_players
+            - label: Choose a group
+              value: pick_group
+    speaker_pick:
+      name: Players
+      description: >
+        The MA players the knob may control. Resolution order is
+        playing → remembered → this list in order, so list your
+        most-used speaker first. Leave TVs and displays out, or add
+        them to Never-pick below.
+      default: []
+      visible:
+        field: speaker_source
+        value: pick_players
+      selector:
+        entity:
+          multiple: true
+          reorder: true
+          filter:
+            - integration: music_assistant
+              domain: media_player
+    speaker_group:
       name: Speaker group
       description: >
-        Group helper containing your Music Assistant speaker
-        media_player entities. Leave TVs and dashboard displays out —
-        they are never picked as target.
+        Group helper with your MA speaker media_players. Pairs with
+        the memory keeper (examples/ma-active-player-memory.yaml).
+      visible:
+        field: speaker_source
+        value: pick_group
       selector:
         entity:
           domain: group
+    exclude_players:
+      name: Never-pick
+      description: >
+        Players the knob must never control — TVs, dashboard
+        displays, anything shared. Applies in every mode above.
+        (Music Assistant exposes some of these as players, so
+        auto-discovery alone cannot exclude them.)
+      default: []
+      selector:
+        entity:
+          multiple: true
+          filter:
+            - domain: media_player
     memory_helper:
-      name: Active-player memory
+      name: Active-player memory (optional)
       description: >
         input_text helper written by the memory-keeper automation
-        (examples/ma-active-player-memory.yaml). Falls back to the
-        first group member when empty or stale.
+        (examples/ma-active-player-memory.yaml). Leave empty to skip —
+        the knob falls back to the first candidate when nothing is
+        playing.
       selector:
         entity:
           domain: input_text
@@ -77,49 +138,72 @@ blueprint:
       name: Seek latch helper
       description: >
         input_boolean helper that arms seek mode while the knob is
-        held (e.g. input_boolean.knob_seek). Rotations while it is on
-        seek instead of changing volume; the hold branch clears it.
-        Reads are time-bounded, so a latch stuck on by a restart
-        self-heals after the seek window.
+        held (e.g. input_boolean.knob_seek — one per knob). Rotations
+        while it is on seek instead of changing volume; the hold
+        branch clears it. Reads are time-bounded, so a latch stuck on
+        by a restart self-heals after the seek window.
       selector:
         entity:
           domain: input_boolean
-    volume_db_per_detent:
-      name: Volume step
+    announce_action:
+      name: Announce favourite (optional)
       description: >
-        dB per rotation detent. 1 dB multiplies/divides the level by
-        ~1.122 each detent (logarithmic, matches human hearing).
-      default: 1
+        Runs after a hold favourites the song — e.g. a TTS "Added the
+        song to favourites". Leave empty for silence. Paste-ready
+        example (swap the voice and speaker for yours):
+
+        `- action: tts.speak`
+        `  target: {entity_id: tts.piper}`
+        `  data:`
+        `    media_player_entity_id: media_player.sendspin`
+        `    message: "Added {{ state_attr(target, 'media_title') }} to favourites"`
+
+        `target` is the knob's current speaker and is available to
+        anything placed here. Anything action-like works, not just TTS.
+      default: []
       selector:
-        number:
-          min: 0.5
-          max: 3
-          step: 0.5
-          unit_of_measurement: dB
-    seek_seconds:
-      name: Seek step
-      description: Seconds per detent when turning while held.
-      default: 10
-      selector:
-        number:
-          min: 5
-          max: 60
-          step: 5
-          unit_of_measurement: s
-    seek_window:
-      name: Hold-to-seek window
-      description: >
-        Seconds after a hold during which turns seek (and the
-        favourite waits to make sure you are not turning). Longer is
-        more forgiving of pause-then-turn; the favourite lands this
-        much later.
-      default: 2
-      selector:
-        number:
-          min: 1
-          max: 5
-          step: 0.5
-          unit_of_measurement: s
+        action:
+    tuning:
+      name: Tuning
+      icon: mdi:tune
+      description: Feel and timing. Defaults suit most knobs.
+      collapsed: true
+      input:
+        volume_db_per_detent:
+          name: Volume step
+          description: >
+            dB per rotation detent. 1 dB multiplies/divides the level
+            by ~1.122 each detent (logarithmic, matches human hearing).
+          default: 1
+          selector:
+            number:
+              min: 0.5
+              max: 3
+              step: 0.5
+              unit_of_measurement: dB
+        seek_seconds:
+          name: Seek step
+          description: Seconds per detent when turning while held.
+          default: 10
+          selector:
+            number:
+              min: 5
+              max: 60
+              step: 5
+              unit_of_measurement: s
+        seek_window:
+          name: Hold-to-seek window
+          description: >
+            How long after a hold turns seek (and the favourite waits
+            to make sure you are not turning). Longer is more forgiving
+            of pause-then-turn; the favourite lands this much later.
+          default:
+            hours: 0
+            minutes: 0
+            seconds: 2
+          selector:
+            duration:
+              enable_day: false
 
 triggers:
   - trigger: mqtt
@@ -151,39 +235,59 @@ variables:
     rotate_left: volume_left
     single: press
     hold: hold
-  db_step: !input volume_db_per_detent
-  seek_step: !input seek_seconds
-  speaker_group: !input speakers
+  source: !input speaker_source
+  mode_sel: !input mode_select
+  picked: !input speaker_pick
+  group_in: !input speaker_group
+  excl: !input exclude_players
   memory: !input memory_helper
   latch: !input seek_latch
+  db_step: !input volume_db_per_detent
+  seek_step: !input seek_seconds
   window: !input seek_window
-  members: "{{ expand(speaker_group) | map(attribute='entity_id') | list }}"
-  now_playing: "{{ expand(speaker_group) | selectattr('state','eq','playing') | map(attribute='entity_id') | list }}"
-  stored: "{{ states(memory) }}"
+  win_secs: "{{ (window.hours | int(0)) * 3600 + (window.minutes | int(0)) * 60 + (window.seconds | int(0)) }}"
+  # Music Assistant's own players only — the room also holds non-MA
+  # media players that must never be candidates.
+  ma_players: "{{ integration_entities('music_assistant') | select('match', 'media_player\\.') | list }}"
+  room_area: "{{ area_id(mode_sel) }}"
+  room_cands: "{{ area_entities(room_area) | select('in', ma_players) | list if room_area else [] }}"
+  group_cands: "{{ expand(group_in) | map(attribute='entity_id') | list if group_in else [] }}"
+  picked_cands: "{{ picked if picked else [] }}"
+  raw_cands: "{{ room_cands if source == 'knob_room' else (picked_cands if source == 'pick_players' else group_cands) }}"
+  excluded: "{{ excl if excl else [] }}"
+  members: "{{ raw_cands | reject('in', excluded) | list }}"
+  now_playing: "{{ expand(members) | selectattr('state','eq','playing') | map(attribute='entity_id') | list }}"
+  stored: "{{ states(memory) if memory else 'none' }}"
   target: >
     {% if now_playing %}{{ now_playing[0] }}
     {% elif stored in members %}{{ stored }}
-    {% else %}{{ members[0] }}{% endif %}
+    {% elif members %}{{ members[0] }}
+    {% else %}none{% endif %}
 
 conditions:
-  - condition: template
-    value_template: "{{ trigger.id in ['triple', 'triple_rev'] or trigger.payload in event_map }}"
+  - alias: "Knob input in a known vocabulary, and at least one candidate speaker"
+    condition: template
+    value_template: "{{ members | count > 0 and (trigger.id in ['triple', 'triple_rev'] or trigger.payload in event_map) }}"
 
 actions:
   - choose:
-      - conditions: "{{ trigger.id in ['triple', 'triple_rev'] }}"
+      - alias: "Triple-press: previous track (fires on either mode flip)"
+        conditions: "{{ trigger.id in ['triple', 'triple_rev'] }}"
         sequence:
           # MA treats a lone previous as restart-current once past its
           # restart threshold, so fire twice: the first restarts, the
           # second steps back. Mirrors the relay's dim_prev behaviour.
-          - action: media_player.media_previous_track
+          - alias: "Previous (restarts the current track)"
+            action: media_player.media_previous_track
             target:
               entity_id: "{{ target }}"
           - delay: "00:00:02"
-          - action: media_player.media_previous_track
+          - alias: "Previous again (steps back)"
+            action: media_player.media_previous_track
             target:
               entity_id: "{{ target }}"
-      - conditions: "{{ trigger.id == 'knob' }}"
+      - alias: "Knob input"
+        conditions: "{{ trigger.id == 'knob' }}"
         sequence:
           - variables:
               gesture: "{{ event_map[trigger.payload] }}"
@@ -196,9 +300,10 @@ actions:
                 {{ gesture in ['seek_right', 'seek_left'] or
                    (gesture in ['volume_right', 'volume_left'] and
                     is_state(latch, 'on') and
-                    (now() - states[latch].last_changed).total_seconds() < (window | float)) }}
+                    (now() - states[latch].last_changed).total_seconds() < (win_secs | float)) }}
           - choose:
-              - conditions: "{{ seeking }}"
+              - alias: "Turn while held: seek"
+                conditions: "{{ seeking }}"
                 sequence:
                   - variables:
                       pos: "{{ state_attr(target, 'media_position') | float(0) }}"
@@ -210,14 +315,17 @@ actions:
                       stepped: "{{ (live_pos | float) + (seek_step | float if fwd else -(seek_step | float)) }}"
                       seek_to: "{{ ([([stepped | float, 0.0] | max), dur | float] | min) if (dur | float > 0) else (stepped | float) }}"
                   # No duration (idle/stale player) means nowhere to seek: stop.
-                  - condition: template
+                  - alias: "Stop when the player has no duration"
+                    condition: template
                     value_template: "{{ dur | float(0) > 0 }}"
-                  - action: media_player.media_seek
+                  - alias: Seek the track
+                    action: media_player.media_seek
                     target:
                       entity_id: "{{ target }}"
                     data:
                       seek_position: "{{ seek_to }}"
-              - conditions: "{{ gesture == 'volume_right' or gesture == 'volume_left' }}"
+              - alias: "Plain turn: volume"
+                conditions: "{{ gesture == 'volume_right' or gesture == 'volume_left' }}"
                 sequence:
                   - variables:
                       # float(0.02): unreadable/off players start from ~2% so the
@@ -230,22 +338,28 @@ actions:
                       # Taper down asymptotes to zero without reaching it: snap
                       # anything below -46 dB to true 0. Clamp to [0, 1].
                       level: "{{ 0.0 if (not fwd and (raw | float) < 0.005) else ([[(raw | float), 0.0] | max, 1.0] | min | round(3)) }}"
-                  - action: media_player.volume_set
+                  - alias: Set the volume
+                    action: media_player.volume_set
                     target:
                       entity_id: "{{ target }}"
                     data:
                       volume_level: "{{ level }}"
-              - conditions: "{{ gesture == 'press' }}"
+              - alias: "Press: play/pause"
+                conditions: "{{ gesture == 'press' }}"
                 sequence:
-                  - action: media_player.media_toggle
+                  - alias: Toggle play/pause
+                    action: media_player.media_toggle
                     target:
                       entity_id: "{{ target }}"
-              - conditions: "{{ gesture == 'double_press' }}"
+              - alias: "Double-press: next track"
+                conditions: "{{ gesture == 'double_press' }}"
                 sequence:
-                  - action: media_player.media_next_track
+                  - alias: Skip to next track
+                    action: media_player.media_next_track
                     target:
                       entity_id: "{{ target }}"
-              - conditions: "{{ gesture == 'hold' }}"
+              - alias: "Hold: favourite (+ optional announce)"
+                conditions: "{{ gesture == 'hold' }}"
                 sequence:
                   # Echo guard: a hold arriving while a previous hold's
                   # window is still open is the firmware's double echo
@@ -254,15 +368,18 @@ actions:
                   # replaces the old `this.last_triggered` debounce,
                   # which misfired whenever ANY trigger (e.g. a rotation)
                   # had fired recently, swallowing real favourites.
-                  - condition: template
-                    value_template: "{{ not is_state(latch, 'on') or (now() - states[latch].last_changed).total_seconds() > (window | float) }}"
-                  - action: input_boolean.turn_on
+                  - alias: Skip firmware double-echoes and mid-gesture re-presses
+                    condition: template
+                    value_template: "{{ not is_state(latch, 'on') or (now() - states[latch].last_changed).total_seconds() > (win_secs | float) }}"
+                  - alias: Arm the seek latch
+                    action: input_boolean.turn_on
                     target:
                       entity_id: "{{ latch }}"
                   # Own the whole press: if a turn follows within the
                   # window this was a seek (the rotation runs already
                   # seeked via the latch) — suppress the favourite.
-                  - wait_for_trigger:
+                  - alias: Wait to see if a turn follows (seek) or not (favourite)
+                    wait_for_trigger:
                       - trigger: mqtt
                         topic: !input knob_action_topic
                         payload: rotate_right
@@ -275,22 +392,30 @@ actions:
                       - trigger: mqtt
                         topic: !input knob_action_topic
                         payload: color_temperature_step_down
-                    timeout:
-                      seconds: "{{ window }}"
+                    timeout: !input seek_window
                     continue_on_timeout: true
-                  - action: input_boolean.turn_off
+                  - alias: Disarm the seek latch
+                    action: input_boolean.turn_off
                     target:
                       entity_id: "{{ latch }}"
-                  - condition: template
+                  - alias: Favourite only when no turn followed
+                    condition: template
                     value_template: "{{ not wait.completed }}"
                   # Favourite via the MA integration's per-player button,
                   # resolved generically through the target's device — no
                   # hardcoded button entity id to maintain.
-                  - action: button.press
+                  - alias: Press the player's favourite button
+                    action: button.press
                     target:
                       entity_id: "{{ device_entities(device_id(target)) | select('search', 'favor') | list | first }}"
+                  # Optional announce slot: empty by default (no-op).
+                  # `target` and its attributes are in scope here.
+                  - alias: Announce the favourite (optional, empty by default)
+                    sequence: !input announce_action
 
 # Parallel: rotation runs stay instant while a hold run waits out the
 # seek window; the latch (not run ordering) decides seek vs volume.
+# Silent when overlapping runs exceed the cap (fast spins).
 mode: parallel
 max: 10
+max_exceeded: silent

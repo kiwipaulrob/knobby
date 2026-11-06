@@ -43,21 +43,55 @@ def test_generic_blueprint_gestures():
     assert bp.get("mode") == "queued" and bp.get("max") == 10
 
 
+def _all_inputs(bp):
+    """Yield (name, spec) for every input, descending into sections."""
+    for name, spec in bp["blueprint"]["input"].items():
+        if isinstance(spec, dict) and "input" in spec:
+            yield from _all_inputs({"blueprint": {"input": spec["input"]}})
+        else:
+            yield name, spec
+
+
 def test_native_blueprint_inputs():
     bp = load(NATIVE)
     assert bp["blueprint"]["domain"] == "automation"
-    inputs = bp["blueprint"]["input"]
-    for key in ("knob_action_topic", "mode_select", "speakers",
-                "memory_helper", "seek_latch", "volume_db_per_detent",
-                "seek_seconds", "seek_window"):
-        assert key in inputs, key
-    assert inputs["volume_db_per_detent"]["default"] == 1
-    assert inputs["seek_seconds"]["default"] == 10
-    assert inputs["seek_window"]["default"] == 2
+    assert bp["blueprint"].get("author")
+    assert bp["blueprint"]["homeassistant"]["min_version"] == "2024.6.0"
+    top = bp["blueprint"]["input"]
+    for key in ("knob_action_topic", "mode_select", "speaker_source",
+                "speaker_pick", "speaker_group", "exclude_players",
+                "memory_helper", "seek_latch", "announce_action", "tuning"):
+        assert key in top, key
+    assert top["speaker_source"]["default"] == "knob_room"
+    assert top["speaker_pick"]["default"] == []
+    assert top["speaker_pick"]["visible"] == {"field": "speaker_source",
+                                             "value": "pick_players"}
+    assert top["speaker_group"]["visible"] == {"field": "speaker_source",
+                                              "value": "pick_group"}
+    assert top["exclude_players"]["default"] == []
+    assert top["announce_action"]["default"] == []
+    tuning = top["tuning"]
+    assert tuning.get("collapsed") is True
+    for key in ("volume_db_per_detent", "seek_seconds", "seek_window"):
+        assert key in tuning["input"], key
+    assert tuning["input"]["volume_db_per_detent"]["default"] == 1
+    assert tuning["input"]["seek_seconds"]["default"] == 10
+    assert tuning["input"]["seek_window"]["default"] == {"hours": 0,
+                                                        "minutes": 0,
+                                                        "seconds": 2}
     # Parallel: rotation runs stay instant while a hold run waits out
     # the seek window; the latch (not run ordering) decides seek vs
     # volume.
     assert bp.get("mode") == "parallel" and bp.get("max") == 10
+    assert bp.get("max_exceeded") == "silent"
+
+
+def test_native_inputs_all_have_selectors():
+    bp = load(NATIVE)
+    for name, spec in _all_inputs(bp):
+        assert spec.get("name"), name
+        assert spec.get("description"), name
+        assert "selector" in spec, name
 
 
 def test_native_blueprint_no_relay():
@@ -71,7 +105,11 @@ def test_native_blueprint_no_relay():
                      "input_boolean", "wait_for_trigger", "wait.completed",
                      "last_changed",
                      "device_entities(device_id(target))",
-                     "media_position_updated_at"):
+                     "media_position_updated_at",
+                     "integration_entities('music_assistant')",
+                     "room_cands", "group_cands", "picked_cands",
+                     "exclude", "win_secs",
+                     "sequence: !input announce_action"):
         assert required in raw, required
 
 
