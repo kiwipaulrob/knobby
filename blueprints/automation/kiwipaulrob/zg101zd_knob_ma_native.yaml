@@ -145,24 +145,32 @@ blueprint:
       selector:
         entity:
           domain: input_boolean
-    announce_action:
-      name: Announce favourite (optional)
+    announce_message:
+      name: Announce message (optional)
       description: >
-        Runs after a hold favourites the song — e.g. a TTS "Added the
-        song to favourites". Leave empty for silence. Paste-ready
-        example (swap the voice and speaker for yours):
-
-        `- action: tts.speak`
-        `  target: {entity_id: tts.piper}`
-        `  data:`
-        `    media_player_entity_id: media_player.sendspin`
-        `    message: "Added {{ state_attr(target, 'media_title') }} to favourites"`
-
-        `target` is the knob's current speaker and is available to
-        anything placed here. Anything action-like works, not just TTS.
-      default: []
+        Said aloud after a hold favourites the song. {song} is
+        replaced with the track name — e.g. the default reads
+        "Added Dreams to favourites". Clear it for silence; the voice
+        and speaker below decide whether it talks at all.
+      default: "Added {song} to favourites"
       selector:
-        action:
+        text:
+    announce_voice:
+      name: Announce voice (optional)
+      description: >
+        Which voice says it (e.g. tts.piper). Empty = silent, even
+        with a message above.
+      selector:
+        entity:
+          domain: tts
+    announce_speaker:
+      name: Announce speaker (optional)
+      description: >
+        Which speaker says it. Empty = silent, even with a message
+        above. Never a TV.
+      selector:
+        entity:
+          domain: media_player
     tuning:
       name: Tuning
       icon: mdi:tune
@@ -242,6 +250,9 @@ variables:
   excl: !input exclude_players
   memory: !input memory_helper
   latch: !input seek_latch
+  announce_msg: !input announce_message
+  announce_voice: !input announce_voice
+  announce_speaker: !input announce_speaker
   db_step: !input volume_db_per_detent
   seek_step: !input seek_seconds
   window: !input seek_window
@@ -408,10 +419,20 @@ actions:
                     action: button.press
                     target:
                       entity_id: "{{ device_entities(device_id(target)) | select('search', 'favor') | list | first }}"
-                  # Optional announce slot: empty by default (no-op).
-                  # `target` and its attributes are in scope here.
-                  - alias: Announce the favourite (optional, empty by default)
-                    sequence: !input announce_action
+                  # Optional announce: the message ships prefilled and
+                  # generic ({song} becomes the track name); it talks
+                  # only once a voice AND a speaker are picked.
+                  - alias: Announce the favourite (optional)
+                    choose:
+                      - conditions: "{{ announce_msg and announce_voice and announce_speaker }}"
+                        sequence:
+                          - alias: Speak the favourite confirmation
+                            action: tts.speak
+                            target:
+                              entity_id: "{{ announce_voice }}"
+                            data:
+                              media_player_entity_id: "{{ announce_speaker }}"
+                              message: "{{ announce_msg | replace('{song}', state_attr(target, 'media_title') or 'the track') }}"
 
 # Parallel: rotation runs stay instant while a hold run waits out the
 # seek window; the latch (not run ordering) decides seek vs volume.

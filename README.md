@@ -196,12 +196,12 @@ position while playing, and skips when the player has no duration
 (idle/stale). Volume step, seek step and the hold-to-seek window live
 in a collapsed Tuning section (defaults 1 dB, 10 s, 2 s).
 
-Holds can announce: the optional Announce box takes any action and
-runs it after the favourite lands, with the knob's current speaker
-available as `target` — e.g. a TTS
-`Added {{ state_attr(target, 'media_title') }} to favourites`.
-Leave it empty for silence; the description carries a paste-ready
-example. Requires HA 2024.6.0+ (input sections); tested on 2026.10.4.
+Holds can announce: the message box ships prefilled with
+`Added {song} to favourites` ({song} becomes the track name, or "the
+track" if the player reports none). Pick a voice (e.g. tts.piper) and
+a speaker and it talks after each favourite; clear the message — or
+leave the voice/speaker empty — for silence. No YAML, no action
+editor. Requires HA 2024.6.0+ (input sections); tested on 2026.10.4.
 
 ## Lessons encoded here (read before simplifying)
 

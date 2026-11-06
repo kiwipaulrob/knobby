@@ -60,7 +60,8 @@ def test_native_blueprint_inputs():
     top = bp["blueprint"]["input"]
     for key in ("knob_action_topic", "mode_select", "speaker_source",
                 "speaker_pick", "speaker_group", "exclude_players",
-                "memory_helper", "seek_latch", "announce_action", "tuning"):
+                "memory_helper", "seek_latch", "announce_message",
+                "announce_voice", "announce_speaker", "tuning"):
         assert key in top, key
     assert top["speaker_source"]["default"] == "knob_room"
     assert top["speaker_pick"]["default"] == []
@@ -69,7 +70,9 @@ def test_native_blueprint_inputs():
     assert top["speaker_group"]["visible"] == {"field": "speaker_source",
                                               "value": "pick_group"}
     assert top["exclude_players"]["default"] == []
-    assert top["announce_action"]["default"] == []
+    assert top["announce_message"]["default"] == "Added {song} to favourites"
+    assert top["announce_voice"]["selector"] == {"entity": {"domain": "tts"}}
+    assert top["announce_speaker"]["selector"] == {"entity": {"domain": "media_player"}}
     tuning = top["tuning"]
     assert tuning.get("collapsed") is True
     for key in ("volume_db_per_detent", "seek_seconds", "seek_window"):
@@ -109,7 +112,7 @@ def test_native_blueprint_no_relay():
                      "integration_entities('music_assistant')",
                      "room_cands", "group_cands", "picked_cands",
                      "exclude", "win_secs",
-                     "sequence: !input announce_action"):
+                     "announce_msg", "tts.speak", "{song}"):
         assert required in raw, required
 
 
