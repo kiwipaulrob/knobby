@@ -88,8 +88,9 @@ fallback already lands correctly.
 **6. (Optional) voice confirmation.** The announce message ships
 prefilled (`Added {song} by {artist} to favourites`); pick a voice and
 it speaks after each favourite — on the picked speaker, or the knob's
-current speaker if that box is empty. Clear the message, or leave the
-voice empty, for silence.
+current speaker if that box is empty. A speed slider (0.5×–1.5×,
+natural pace by default) slows or quickens Piper voices — other
+engines ignore it. Clear the message, or leave the voice empty, for silence.
 
 ## Technique and quirks
 

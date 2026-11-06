@@ -200,6 +200,21 @@ blueprint:
       selector:
         entity:
           domain: media_player
+    announce_speed:
+      name: Announce speed (optional)
+      description: >
+        How fast the favourite confirmation is spoken, as a multiple
+        of the voice's natural pace (0.8 = slower, 1.2 = faster).
+        Passed to the voice as Piper/Wyoming `length_scale` (its
+        inverse: higher length means slower speech), so it only affects
+        Piper/Wyoming voices — other engines ignore it. 1.0 = natural
+        pace.
+      default: 1
+      selector:
+        number:
+          min: 0.5
+          max: 1.5
+          step: 0.1
     tuning:
       name: Tuning
       icon: mdi:tune
@@ -283,6 +298,7 @@ variables:
   announce_msg: !input announce_message
   announce_voice: !input announce_voice
   announce_speaker: !input announce_speaker
+  announce_speed: !input announce_speed
   # Empty announce speaker falls back to the knob's current speaker,
   # so the announcement follows the music like the favourite does.
   ann_speaker: "{{ announce_speaker if announce_speaker else target }}"
@@ -466,6 +482,12 @@ actions:
                               entity_id: "{{ announce_voice }}"
                             data:
                               media_player_entity_id: "{{ ann_speaker }}"
+                              # Speed as the voice's natural-pace multiple;
+                              # Piper/Wyoming reads it as length_scale
+                              # (inverse: higher length = slower speech).
+                              # Other engines ignore unknown options.
+                              options:
+                                length_scale: "{{ (1 / (announce_speed | float(1))) | round(3) }}"
                               message: "{{ announce_msg | replace('{song}', state_attr(target, 'media_title') or 'the track') | replace('{artist}', state_attr(target, 'media_artist') or 'unknown artist') }}"
   # Diary write-back (optional, off by default): after any successful
   # gesture, record the speaker just used so the knob finds it next

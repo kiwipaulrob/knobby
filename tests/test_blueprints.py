@@ -61,7 +61,7 @@ def test_native_blueprint_inputs():
     for key in ("knob_action_topic", "mode_select", "speaker_source",
                 "speaker_pick", "speaker_group", "exclude_players",
                 "memory_helper", "remember_speaker", "seek_latch", "announce_message",
-                "announce_voice", "announce_speaker", "tuning"):
+                "announce_voice", "announce_speaker", "announce_speed", "tuning"):
         assert key in top, key
     assert top["knob_action_topic"]["default"] == "zigbee2mqtt/knob/action"
     assert top["speaker_source"]["default"] == "knob_room"
@@ -76,6 +76,10 @@ def test_native_blueprint_inputs():
     assert top["announce_speaker"]["selector"] == {"entity": {"domain": "media_player"}}
     assert top["remember_speaker"]["default"] is False
     assert "boolean" in top["remember_speaker"]["selector"]
+    assert top["announce_speed"]["default"] == 1
+    assert top["announce_speed"]["selector"] == {"number": {"min": 0.5,
+                                                           "max": 1.5,
+                                                           "step": 0.1}}
     tuning = top["tuning"]
     assert tuning.get("collapsed") is True
     for key in ("volume_db_per_detent", "seek_seconds", "seek_window"):
@@ -117,7 +121,7 @@ def test_native_blueprint_no_relay():
                      "exclude", "win_secs",
                      "announce_msg", "tts.speak", "{song}", "{artist}",
                      "ann_speaker", "remember_speaker",
-                     "input_text.set_value"):
+                     "input_text.set_value", "length_scale"):
         assert required in raw, required
 
 
