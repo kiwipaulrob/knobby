@@ -316,7 +316,10 @@ variables:
   picked_cands: "{{ picked if picked else [] }}"
   raw_cands: "{{ room_cands if source == 'knob_room' else (picked_cands if source == 'pick_players' else group_cands) }}"
   excluded: "{{ excl if excl else [] }}"
-  members: "{{ raw_cands | reject('in', excluded) | list }}"
+  # Ghost-proofing: never target unavailable/unknown players, or the
+  # knob silently no-ops on a dead entity while the real speaker idles.
+  avail: "{{ expand(raw_cands | reject('in', excluded) | list) | rejectattr('state', 'in', ['unavailable', 'unknown']) | map(attribute='entity_id') | list }}"
+  members: "{{ avail }}"
   now_playing: "{{ expand(members) | selectattr('state','eq','playing') | map(attribute='entity_id') | list }}"
   stored: "{{ states(memory) if memory else 'none' }}"
   target: >
