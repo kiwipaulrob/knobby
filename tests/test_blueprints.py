@@ -175,6 +175,54 @@ def _walk_templates(node, out):
             _walk_templates(v, out)
 
 
+def _find_volume_vars(node):
+    # The plain-turn step is "- variables: {cur, factor, base, raw, level}".
+    if isinstance(node, dict):
+        if isinstance(node.get("variables"), dict) and set(
+                ("cur", "raw", "level")) <= set(node["variables"]):
+            return node["variables"]
+        for v in node.values():
+            hit = _find_volume_vars(v)
+            if hit is not None:
+                return hit
+    elif isinstance(node, list):
+        for v in node:
+            hit = _find_volume_vars(v)
+            if hit is not None:
+                return hit
+    return None
+
+
+def test_volume_climbs_from_whisper_levels():
+    # Live bug: MA holds whole percent, so 2% x1.122 = 2.24% read back 2%
+    # and the knob could never climb past 2%. Render the SHIPPED raw/level
+    # templates and demand real progress from 0% and 2% upward, plus a
+    # full taper to 0 going down.
+    import jinja2
+    bp = load(NATIVE)
+    tpls = _find_volume_vars(bp)
+    assert tpls is not None, "volume variables block not found"
+    env = jinja2.Environment()
+    raw_t, level_t = (env.from_string(tpls["raw"]),
+                      env.from_string(tpls["level"]))
+
+    def step(vol, fwd, factor=10 ** (1 / 20)):
+        ctx = {"cur": vol, "fwd": fwd, "factor": factor, "db_step": 1,
+               "base": vol if vol > 0 else 0.02}
+        raw = float(raw_t.render(ctx))
+        return float(level_t.render({**ctx, "raw": raw}))
+
+    for start in (0.0, 0.02):
+        v = start
+        for _ in range(10):
+            v = step(v, True)
+        assert v > start + 0.05, (start, v)
+    v = 0.5
+    for _ in range(200):
+        v = step(v, False)
+    assert v == 0.0, v
+
+
 def test_native_templates_parse():
     """Every Jinja template in the native blueprint must compile.
 
