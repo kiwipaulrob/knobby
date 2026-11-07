@@ -93,7 +93,8 @@ def test_native_blueprint_inputs():
                                                            "step": 0.1}}
     tuning = top["tuning"]
     assert tuning.get("collapsed") is True
-    for key in ("volume_db_per_detent", "seek_seconds", "seek_window"):
+    for key in ("volume_db_per_detent", "seek_seconds", "seek_window",
+                "position_clock"):
         assert key in tuning["input"], key
     assert tuning["input"]["volume_db_per_detent"]["default"] == 1
     assert tuning["input"]["seek_seconds"]["default"] == 10
@@ -172,13 +173,19 @@ def test_hold_skips_continued_hold_echo():
 
 
 def test_seek_base_freshness_guard():
-    # Live bug: a player that never reports progress (frozen
-    # media_position_updated_at) makes the forward projection catapult
-    # every seek to the track end. Projection must require a fresh
-    # sample and fall back to the raw position otherwise.
+    # Live bug (Nov 2026): MA only refreshes position in the first seconds
+    # of each track, so projecting from a stale sample catapulted every
+    # seek to the track end. The seek base must prefer the knob's own
+    # clock while it names the playing track (clock_ok), then a fresh
+    # feed sample (feed_ok), then the raw sample — never a stale
+    # projection. Booleans render 1/0 because a bare "False" string is
+    # truthy in {% if %}.
     raw = open(NATIVE).read()
-    assert "as_timestamp(upd)) < 60" in raw
-    assert "fix the player feed" in raw
+    for token in ("feed_ok", "clock_ok", "base_pos", "position_clock",
+                  "tracks it itself", "Anchor the position clock",
+                  "Invalidate the position clock"):
+        assert token in raw, token
+    assert "live_pos" not in raw
 
 
 def test_stamp_guard_is_boolean():
@@ -298,4 +305,178 @@ def test_variables_defined_before_use():
     bp = load(NATIVE)
     keys = list(bp["variables"].keys())
     assert keys.index("ann_speaker") > keys.index("target"), keys
+
+
+def _find_seek_vars(node):
+    # The seek step is "- variables: {pos, upd, dur, ..., seek_to}".
+    if isinstance(node, dict):
+        if isinstance(node.get("variables"), dict) and "seek_to" in node[
+                "variables"]:
+            return node["variables"]
+        for v in node.values():
+            hit = _find_seek_vars(v)
+            if hit is not None:
+                return hit
+    elif isinstance(node, list):
+        for v in node:
+            hit = _find_seek_vars(v)
+            if hit is not None:
+                return hit
+    return None
+
+
+def _find_step(node, alias):
+    # Find a "- alias: <alias>" step dict anywhere in the blueprint.
+    if isinstance(node, dict):
+        if node.get("alias") == alias:
+            return node
+        for v in node.values():
+            hit = _find_step(v, alias)
+            if hit is not None:
+                return hit
+    elif isinstance(node, list):
+        for v in node:
+            hit = _find_step(v, alias)
+            if hit is not None:
+                return hit
+    return None
+
+
+def test_position_clock_math():
+    # The knob's own clock must beat the dead feed: with a minutes-stale
+    # media_position_updated_at, the seek base extrapolates from the
+    # clock anchor, not the frozen sample. Render the SHIPPED templates
+    # (top-level parse + seek block) under stubbed HA functions.
+    import jinja2
+    import json
+    from datetime import datetime, timezone
+    bp = load(NATIVE)
+    seek_tpls = _find_seek_vars(bp)
+    assert seek_tpls is not None, "seek variables block not found"
+    anchor_step = _find_step(bp, "Anchor the position clock on this seek")
+    assert anchor_step is not None, "anchor step not found"
+    anchor_tpl = anchor_step["choose"][0]["sequence"][0]["data"]["value"]
+
+    NOW = 1794000000.0
+
+    def iso(dt_epoch):
+        return datetime.fromtimestamp(dt_epoch,
+                                      tz=timezone.utc).isoformat()
+
+    env = jinja2.Environment()
+    env.filters["from_json"] = json.loads
+    env.filters["to_json"] = lambda v: json.dumps(v)
+
+    def run(feed_pos, feed_age_s, clock_val, title, playing, dur,
+            fwd=True, step=10.0, now_epoch=NOW):
+        now_d = datetime.fromtimestamp(now_epoch, tz=timezone.utc)
+        attrs = {"media_position": feed_pos,
+                 "media_position_updated_at": (iso(now_epoch - feed_age_s)
+                                               if feed_age_s is not None
+                                               else None),
+                 "media_duration": dur, "media_title": title}
+
+        def states(eid):
+            if eid == "input_text.clock":
+                return clock_val
+            return "unknown"
+
+        def state_attr(eid, attr):
+            if eid == "media_player.test":
+                return attrs.get(attr)
+            return None
+
+        def is_state(eid, want):
+            return (eid == "media_player.test"
+                    and ("playing" if playing else "paused") == want)
+
+        def now():
+            return now_d
+
+        def as_timestamp(v):
+            if isinstance(v, datetime):
+                return v.timestamp()
+            if isinstance(v, (int, float)):
+                return float(v)
+            return datetime.fromisoformat(v).timestamp()
+
+        glb = {"states": states, "state_attr": state_attr,
+               "is_state": is_state, "now": now,
+               "as_timestamp": as_timestamp}
+        ctx = {"target": "media_player.test",
+               "clock": "input_text.clock" if clock_val is not None else "",
+               "fwd": fwd, "seek_step": step}
+        for name in ("cur_title", "clock_raw", "clk_valid", "clk_t",
+                     "clk_p", "clk_w", "clk_s"):
+            ctx[name] = env.from_string(
+                bp["variables"][name]).render(**glb, **ctx)
+        for name in ("pos", "upd", "dur", "now_ts", "feed_ts", "feed_ok",
+                     "clock_ok", "base_pos", "stepped", "seek_to"):
+            ctx[name] = env.from_string(seek_tpls[name]).render(**glb, **ctx)
+        return ctx, glb
+
+    def clock_json(p, age_s, title="Song", s=1):
+        return json.dumps({"t": title, "p": p, "w": NOW - age_s, "s": s})
+
+    # 1. Dead feed (5 min stale) + live clock: extrapolate from anchor.
+    ctx, _ = run(feed_pos=0, feed_age_s=300,
+                 clock_val=clock_json(100, 120),
+                 title="Song", playing=True, dur=300)
+    assert abs(float(ctx["base_pos"]) - 220) < 2, ctx["base_pos"]
+    assert abs(float(ctx["seek_to"]) - 230) < 2, ctx["seek_to"]
+
+    # 2. Dead feed, no clock helper: raw sample fallback (old behaviour).
+    ctx, _ = run(feed_pos=0, feed_age_s=300, clock_val=None,
+                 title="Song", playing=True, dur=300)
+    assert float(ctx["base_pos"]) == 0, ctx["base_pos"]
+    assert float(ctx["seek_to"]) == 10, ctx["seek_to"]
+
+    # 3. Fresh feed + garbage clock: project from the feed.
+    ctx, _ = run(feed_pos=50, feed_age_s=10, clock_val="hello",
+                 title="Song", playing=True, dur=300)
+    assert abs(float(ctx["base_pos"]) - 60) < 2, ctx["base_pos"]
+
+    # 4. Title mismatch (track changed elsewhere): clock ignored.
+    ctx, _ = run(feed_pos=5, feed_age_s=300,
+                 clock_val=clock_json(100, 120, title="Old Song"),
+                 title="New Song", playing=True, dur=300)
+    assert float(ctx["base_pos"]) == 5, ctx["base_pos"]
+
+    # 5. Paused now: frozen clock, no projection from anything.
+    ctx, _ = run(feed_pos=0, feed_age_s=300,
+                 clock_val=clock_json(100, 120),
+                 title="Song", playing=False, dur=300)
+    assert float(ctx["base_pos"]) == 0, ctx["base_pos"]
+
+    # 6. Anchor write round-trips through from_json, then extrapolates.
+    ctx, glb = run(feed_pos=0, feed_age_s=300,
+                   clock_val=clock_json(100, 120),
+                   title="Song", playing=True, dur=300)
+    ctx["seek_to"] = "230.0"
+    written = env.from_string(anchor_tpl).render(**glb, **ctx)
+    parsed = json.loads(written)
+    assert parsed["t"] == "Song" and parsed["s"] == 1, written
+    assert abs(parsed["p"] - 230) < 0.01 and parsed["w"] == NOW, written
+    ctx2, _ = run(feed_pos=0, feed_age_s=330, clock_val=written,
+                  title="Song", playing=True, dur=300, now_epoch=NOW + 30)
+    assert abs(float(ctx2["base_pos"]) - 260) < 2, ctx2["base_pos"]
+
+    # 7. Runaway extrapolation clamps at duration, never past the end.
+    ctx, _ = run(feed_pos=0, feed_age_s=300,
+                 clock_val=clock_json(290, 60),
+                 title="Song", playing=True, dur=300)
+    assert float(ctx["seek_to"]) == 300, ctx["seek_to"]
+
+    # 8. Backward detent from the clock.
+    ctx, _ = run(feed_pos=0, feed_age_s=300,
+                 clock_val=clock_json(100, 120),
+                 title="Song", playing=True, dur=300, fwd=False)
+    assert abs(float(ctx["seek_to"]) - 210) < 2, ctx["seek_to"]
+
+    # 9. Playing but the feed has no timestamp at all: no crash, raw
+    # sample fallback (a missing updated_at renders "None", which must
+    # never reach as_timestamp).
+    ctx, _ = run(feed_pos=7, feed_age_s=None, clock_val=None,
+                 title="Song", playing=True, dur=300)
+    assert float(ctx["base_pos"]) == 7, ctx["base_pos"]
 

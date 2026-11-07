@@ -39,9 +39,12 @@ blueprint:
     registers; within the window after a favourite-hold, turns seek
     instead of voluming. A fast triple parses as `double` (next track)
     and may ALSO flip the mode (previous) — verify on install.
-    Press-turn seeks from the player's reported position: if it never
-    reports one (frozen media_position_updated_at), seeks land wrong —
-    fix the player feed, the knob cannot.
+    Press-turn seeks from the knob's own position clock (optional
+    input_text below): the player's feed only refreshes position in
+    the first seconds of each track, so the knob tracks it itself —
+    anchoring on fresh feed samples when they exist, extrapolating
+    while playing, and re-anchoring on every seek it makes. Without
+    the clock helper it falls back to the raw reported position.
 
     Tested on HA 2026.10.4. Minimum version 2024.6.0 (input sections).
   domain: automation
@@ -282,6 +285,22 @@ blueprint:
           selector:
             entity:
               domain: input_datetime
+        position_clock:
+          name: Position clock helper
+          description: >
+            An input_text the knob uses as its own position memory, so
+            press-turn seeks land right even when the player stops
+            reporting progress mid-track (Music Assistant only refreshes
+            position in the first seconds of each track). The knob
+            anchors it on fresh feed samples, extrapolates while
+            playing, and re-anchors on every seek, pause, and track
+            change — all by itself. Create an input_text helper and
+            pick it here; leave empty to keep the old feed-only
+            behaviour.
+          default:
+          selector:
+            entity:
+              domain: input_text
 
 triggers:
   - trigger: mqtt
@@ -370,6 +389,25 @@ variables:
   ann_text: >-
     {{ announce_msg | replace('{song}', state_attr(target, 'media_title') or 'the track')
        | replace('{artist}', state_attr(target, 'media_artist') or 'unknown artist') }}
+  # Own position clock (optional input_text helper): the player feed
+  # only refreshes position in the first seconds of each track, so the
+  # knob keeps its own anchor and extrapolates while playing. Parsed
+  # here (top-level variables are visible in every gesture sequence);
+  # the seek step decides clock vs feed vs raw. Defined after target:
+  # variables evaluate top-down. An empty/missing/garbage helper
+  # parses to {} and every clock check below simply stays off.
+  clock: !input position_clock
+  cur_title: "{{ state_attr(target, 'media_title') or '' }}"
+  clock_raw: "{{ states(clock) if clock else '' }}"
+  # Template variables always render to strings, so the parsed anchor
+  # cannot survive as a mapping — validate once here, then re-parse
+  # from clock_raw at each use site (guarded by clk_valid, so a
+  # non-JSON helper never reaches from_json).
+  clk_valid: "{{ 1 if (clock and (clock_raw | trim)[:1] == '{') else 0 }}"
+  clk_t: "{{ (clock_raw | from_json).get('t', '') if clk_valid | int == 1 else '' }}"
+  clk_p: "{{ (clock_raw | from_json).get('p', 0) | float(0) if clk_valid | int == 1 else 0 }}"
+  clk_w: "{{ (clock_raw | from_json).get('w', 0) | float(0) if clk_valid | int == 1 else 0 }}"
+  clk_s: "{{ (clock_raw | from_json).get('s', 0) | int(0) if clk_valid | int == 1 else 0 }}"
 
 conditions:
   - alias: "Knob input in a known vocabulary, and at least one candidate speaker"
@@ -393,6 +431,16 @@ actions:
             action: media_player.media_previous_track
             target:
               entity_id: "{{ target }}"
+          # Same as double-press: the track changes, blank anchor.
+          - alias: Invalidate the position clock (track changing)
+            choose:
+              - conditions: "{{ clock is defined and clock and clock != '' }}"
+                sequence:
+                  - action: input_text.set_value
+                    target:
+                      entity_id: "{{ clock }}"
+                    data:
+                      value: "{{ {'t': '', 'p': 0, 'w': as_timestamp(now()), 's': 0} | to_json }}"
       - alias: "Knob input"
         conditions: "{{ trigger.id == 'knob' }}"
         sequence:
@@ -428,14 +476,25 @@ actions:
                       pos: "{{ state_attr(target, 'media_position') | float(0) }}"
                       upd: "{{ state_attr(target, 'media_position_updated_at') }}"
                       dur: "{{ state_attr(target, 'media_duration') | float(0) }}"
-                      # media_position is sampled at updated_at: project forward
-                      # while playing so seeks land where the music actually is —
-                      # but only from a FRESH sample (under 60 s old). A stale
-                      # or frozen updated_at means the player is not reporting
-                      # progress, and projecting from it catapults every seek
-                      # to the track end; fall back to the raw sample then.
-                      live_pos: "{% if is_state(target, 'playing') and upd and (as_timestamp(now()) - as_timestamp(upd)) < 60 %}{{ pos + (as_timestamp(now()) - as_timestamp(upd)) }}{% else %}{{ pos }}{% endif %}"
-                      stepped: "{{ (live_pos | float) + (seek_step | float if fwd else -(seek_step | float)) }}"
+                      now_ts: "{{ as_timestamp(now()) }}"
+                      feed_ts: "{{ as_timestamp(upd) if (upd is string and '-' in upd) else 0 }}"
+                      # Fresh feed (< 60 s): project forward while playing,
+                      # as before. Rendered 1/0, never True/False: a bare
+                      # boolean renders "False", which is a non-empty (thus
+                      # truthy) string in the {% if %} below.
+                      feed_ok: "{{ 1 if (is_state(target, 'playing') and feed_ts | float > 0 and (now_ts | float - feed_ts | float) < 60) else 0 }}"
+                      # Own clock: usable only while it names the track still
+                      # playing, was left playing, and carries a real anchor.
+                      # A paused clock stays frozen, a track change
+                      # invalidates it (the press / double / triple /
+                      # announce steps maintain it — see below).
+                      clock_ok: "{{ 1 if (clk_t == cur_title and cur_title != '' and clk_s | int == 1 and is_state(target, 'playing') and clk_w | float > 0) else 0 }}"
+                      # Clock first (exact while it is ours), fresh feed
+                      # second, raw sample last. seek_to clamps to [0, dur]
+                      # below, so runaway extrapolation can never catapult
+                      # past the track end the way a stale feed sample did.
+                      base_pos: "{% if clock_ok | int == 1 %}{{ [clk_p | float + (now_ts | float - clk_w | float), 0.0] | max }}{% elif feed_ok | int == 1 %}{{ pos | float + (now_ts | float - feed_ts | float) }}{% else %}{{ pos }}{% endif %}"
+                      stepped: "{{ (base_pos | float) + (seek_step | float if fwd else -(seek_step | float)) }}"
                       seek_to: "{{ ([([stepped | float, 0.0] | max), dur | float] | min) if (dur | float > 0) else (stepped | float) }}"
                   # No duration (idle/stale player) means nowhere to seek: stop.
                   - alias: "Stop when the player has no duration"
@@ -447,6 +506,18 @@ actions:
                       entity_id: "{{ target }}"
                     data:
                       seek_position: "{{ seek_to }}"
+                  # Leave our own anchor where we landed: the next detent
+                  # (or the next press-turn minutes from now) extrapolates
+                  # from here instead of from the player's stale feed.
+                  - alias: Anchor the position clock on this seek
+                    choose:
+                      - conditions: "{{ clock is defined and clock and clock != '' }}"
+                        sequence:
+                          - action: input_text.set_value
+                            target:
+                              entity_id: "{{ clock }}"
+                            data:
+                              value: "{{ {'t': cur_title, 'p': seek_to | float, 'w': now_ts | float, 's': 1 if is_state(target, 'playing') else 0} | to_json }}"
               - alias: "Plain turn: volume"
                 conditions: "{{ gesture == 'volume_right' or gesture == 'volume_left' }}"
                 sequence:
@@ -493,14 +564,45 @@ actions:
                       - alias: "Pause the playing speaker"
                         conditions: "{{ is_state(target, 'playing') }}"
                         sequence:
+                          # Freeze the clock where the music stops: prefer
+                          # our own anchor (exact while it is ours), else a
+                          # fresh feed sample projected, else the raw sample.
+                          - alias: Freeze the position clock on pause
+                            choose:
+                              - conditions: "{{ clock is defined and clock and clock != '' }}"
+                                sequence:
+                                  - variables:
+                                      p_pos: "{{ state_attr(target, 'media_position') | float(0) }}"
+                                      p_upd: "{{ state_attr(target, 'media_position_updated_at') }}"
+                                      p_est: "{% if clk_t == cur_title and cur_title != '' and clk_s | int == 1 and clk_w | float > 0 %}{{ [clk_p | float + (as_timestamp(now()) - clk_w | float), 0.0] | max }}{% elif p_upd is string and '-' in p_upd and (as_timestamp(now()) - as_timestamp(p_upd)) < 60 %}{{ p_pos | float + (as_timestamp(now()) - as_timestamp(p_upd)) }}{% else %}{{ p_pos }}{% endif %}"
+                                  - action: input_text.set_value
+                                    target:
+                                      entity_id: "{{ clock }}"
+                                    data:
+                                      value: "{{ {'t': cur_title, 'p': p_est | float, 'w': as_timestamp(now()), 's': 0} | to_json }}"
                           - action: media_player.media_pause
                             target:
                               entity_id: "{{ target }}"
                     default:
-                      - alias: "Play the idle speaker"
-                        action: media_player.media_play
-                        target:
-                          entity_id: "{{ target }}"
+                      - alias: Play the idle speaker
+                        sequence:
+                          # Resume keeps the position: keep the stored anchor
+                          # when it names this track, else the raw sample —
+                          # and mark playing with a fresh wall time.
+                          - alias: Re-anchor the position clock on play
+                            choose:
+                              - conditions: "{{ clock is defined and clock and clock != '' }}"
+                                sequence:
+                                  - variables:
+                                      r_p: "{% if clk_t == cur_title and cur_title != '' %}{{ clk_p }}{% else %}{{ state_attr(target, 'media_position') | float(0) }}{% endif %}"
+                                  - action: input_text.set_value
+                                    target:
+                                      entity_id: "{{ clock }}"
+                                    data:
+                                      value: "{{ {'t': cur_title, 'p': r_p | float, 'w': as_timestamp(now()), 's': 1} | to_json }}"
+                          - action: media_player.media_play
+                            target:
+                              entity_id: "{{ target }}"
               - alias: "Double-press: next track"
                 conditions: "{{ gesture == 'double_press' }}"
                 sequence:
@@ -508,6 +610,17 @@ actions:
                     action: media_player.media_next_track
                     target:
                       entity_id: "{{ target }}"
+                  # A new track is coming: blank the anchor so the next
+                  # seek re-anchors instead of extrapolating into it.
+                  - alias: Invalidate the position clock (track changing)
+                    choose:
+                      - conditions: "{{ clock is defined and clock and clock != '' }}"
+                        sequence:
+                          - action: input_text.set_value
+                            target:
+                              entity_id: "{{ clock }}"
+                            data:
+                              value: "{{ {'t': '', 'p': 0, 'w': as_timestamp(now()), 's': 0} | to_json }}"
               - alias: "Hold: favourite (+ optional announce)"
                 conditions: "{{ gesture == 'hold' }}"
                 sequence:
@@ -640,6 +753,19 @@ actions:
                                   tts_entity_id: "{{ announce_voice }}"
                                   message: "{{ ann_text }}"
                                   use_pre_announce: false
+                          # Announcements restart the audio flow, so the old
+                          # anchor is suspect — blank it and let the next
+                          # seek re-anchor from the feed. Silent favourites
+                          # never interrupt audio, so the clock stands.
+                          - alias: Invalidate the position clock (announcement moved playback)
+                            choose:
+                              - conditions: "{{ clock is defined and clock and clock != '' }}"
+                                sequence:
+                                  - action: input_text.set_value
+                                    target:
+                                      entity_id: "{{ clock }}"
+                                    data:
+                                      value: "{{ {'t': '', 'p': 0, 'w': as_timestamp(now()), 's': 0} | to_json }}"
   # Diary write-back (optional, off by default): after any successful
   # gesture, record the speaker just used so the knob finds it next
   # time everything is idle. Skipped silently without a memory helper
