@@ -134,9 +134,12 @@ def test_native_blueprint_no_relay():
                      "ann_speaker", "remember_speaker",
                      "music_assistant.play_announcement", "use_pre_announce",
                      "tts_entity_id", "last_turn_helper", "turn_stamp",
-                     "input_datetime.set_datetime",
+                     "turn_ts", "input_datetime.set_datetime",
                      "input_text.set_value", "length_scale"):
         assert required in raw, required
+    # The stamp is read via the timestamp attribute, never string-parsed
+    # (a time-only helper's "HH:MM:SS" state breaks as_timestamp()).
+    assert "as_timestamp(states(turn_stamp))" not in raw
 
 
 def test_native_event_map_covers_gestures():

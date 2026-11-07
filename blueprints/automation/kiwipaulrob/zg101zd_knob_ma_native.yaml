@@ -320,6 +320,13 @@ variables:
   # arriving just after turns was a seek that ran long, not a new
   # favourite. Empty keeps the old forward-watch-only behaviour.
   turn_stamp: !input last_turn_helper
+  # Numeric form of the stamp, read via the helper's `timestamp`
+  # attribute (epoch seconds) rather than string-parsing its state:
+  # a time-only helper's "HH:MM:SS" state makes as_timestamp() fail,
+  # while the attribute degrades gracefully (unknown/unset -> 0 ->
+  # the suppression below simply stays off). Defined after turn_stamp:
+  # variables evaluate top-down.
+  turn_ts: "{{ state_attr(turn_stamp, 'timestamp') | float(0) if turn_stamp else 0 }}"
   announce_msg: !input announce_message
   announce_voice: !input announce_voice
   announce_speaker: !input announce_speaker
@@ -518,7 +525,7 @@ actions:
                   # no wait, no favourite.
                   - alias: Skip when turns just preceded (seek, not favourite)
                     choose:
-                      - conditions: "{{ turn_stamp and states(turn_stamp) not in ['unknown', 'unavailable', 'none', ''] and (as_timestamp(now()) - as_timestamp(states(turn_stamp))) < (win_secs | float) }}"
+                      - conditions: "{{ turn_ts > 0 and (as_timestamp(now()) - turn_ts) < (win_secs | float) }}"
                         sequence:
                           - alias: Disarm the seek latch
                             action: input_boolean.turn_off
