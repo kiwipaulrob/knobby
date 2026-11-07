@@ -181,6 +181,17 @@ def test_seek_base_freshness_guard():
     assert "fix the player feed" in raw
 
 
+def test_stamp_guard_is_boolean():
+    # Live bug: the turn-stamp guards read `{{ turn_stamp }}`, which renders
+    # the helper's entity-id STRING. HA template conditions only pass on the
+    # string "true", so the guard was always false and no turn ever stamped
+    # (helper frozen since provisioning). Guards must be boolean expressions;
+    # the Jinja truthiness inside turn_ts was always fine and stays as is.
+    raw = open(NATIVE).read()
+    assert 'conditions: "{{ turn_stamp }}"' not in raw
+    assert raw.count("(turn_stamp | default('')) != ''") == 2
+
+
 def test_memory_example_parses():
     path = os.path.join(os.path.dirname(__file__), "..", "examples",
                         "ma-active-player-memory.yaml")

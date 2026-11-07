@@ -417,7 +417,7 @@ actions:
                   # stamp and skips the favourite.
                   - alias: Stamp this turn for the hold step
                     choose:
-                      - conditions: "{{ turn_stamp }}"
+                      - conditions: "{{ (turn_stamp | default('')) != '' }}"
                         sequence:
                           - action: input_datetime.set_datetime
                             target:
@@ -455,7 +455,7 @@ actions:
                   # gesture, not a new favourite.
                   - alias: Stamp this turn for the hold step
                     choose:
-                      - conditions: "{{ turn_stamp }}"
+                      - conditions: "{{ (turn_stamp | default('')) != '' }}"
                         sequence:
                           - action: input_datetime.set_datetime
                             target:
