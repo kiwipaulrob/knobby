@@ -269,7 +269,10 @@ blueprint:
             new favourite — without this, every press-and-rotate that
             crosses the knob's ~3 s hold threshold favourites. Create
             an input_datetime helper and pick it here; empty keeps the
-            old forward-watch-only behaviour.
+            old forward-watch-only behaviour. The helper MUST store date
+            AND time — tick both on when creating it (HA offers date-only,
+            which silently disables this fix: a date-only stamp always
+            reads as midnight, so the hold step never sees a recent turn).
           default:
           selector:
             entity:

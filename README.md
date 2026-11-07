@@ -95,7 +95,10 @@ second knob gets its own). Leave it off; the blueprint switches it on
 and off by itself to tell seeking apart from volume.
 
 **3b. Create the recent-turn stamp.** Same Helpers screen → + Create
-helper → Date and/or time (needs both), named e.g. "Knob last turn".
+helper → Date and/or time, named e.g. "Knob last turn" — and tick
+**both Date and Time** (HA offers date-only, which silently breaks
+this: a date-only stamp always reads as midnight, so the hold step
+never sees a recent turn and press-and-rotate favourites again).
 The blueprint stamps it on every rotation so a hold arriving just
 after turns is recognised as a seek, not a favourite — leave it unset
 and only turns *after* the hold cancel the favourite (the old,
