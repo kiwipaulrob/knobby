@@ -139,6 +139,8 @@ These were found the hard way, in live traces. Design around them.
   frozen on pause, re-anchored on play, and blanked on track change
   and after voice announcements (which restart the audio flow). With
   no helper picked, behaviour is the old feed-only fallback.
+  Live-verified on hardware: hold-turn seeks land ±10 s per detent
+  mid-track, and the helper cycled anchor→blank exactly as designed.
 - Pressed-turns (`color_temperature_*`) seek unconditionally (§2).
   Unpressed turns seek only while the **seek latch**
   (`input_boolean.knob_2_seek_latch`) is freshly armed by a hold —
