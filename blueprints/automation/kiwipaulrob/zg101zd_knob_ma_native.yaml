@@ -536,6 +536,25 @@ actions:
                           - alias: Stop, the turns already landed
                             condition: template
                             value_template: "{{ false }}"
+                  # A hold arriving just after a favourite landed is the
+                  # same finger still down (hue_move repeats while held),
+                  # not a new press: the first waiter already favourited
+                  # and announced. Without this, every window-length of
+                  # continued holding favourites and announces again, each
+                  # announcement later than the last.
+                  - alias: Skip when a favourite just landed (continued hold, not a new press)
+                    choose:
+                      - conditions: >-
+                          {% set fav = device_entities(device_id(target)) | select('search', 'favou?r') | list | first %}
+                          {{ fav and (as_timestamp(now()) - as_timestamp(states[fav].last_changed, 0)) < (win_secs | float) }}
+                        sequence:
+                          - alias: Disarm the seek latch
+                            action: input_boolean.turn_off
+                            target:
+                              entity_id: "{{ latch }}"
+                          - alias: Stop, the favourite already landed
+                            condition: template
+                            value_template: "{{ false }}"
                   # Own the whole press: if a turn follows within the
                   # window this was a seek (the rotation runs already
                   # seeked via the latch) — suppress the favourite.

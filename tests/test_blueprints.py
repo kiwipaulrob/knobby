@@ -159,6 +159,18 @@ def test_native_triple_proxy_dual_edge():
     assert "select.select_option" not in raw
 
 
+def test_hold_skips_continued_hold_echo():
+    # Live bug: hue_move repeats ~2/s while held, and the first hold run
+    # disarms the latch when its wait expires — so a continued hold
+    # started a fresh run that favourited and announced AGAIN, each
+    # announcement later than the last. A hold arriving just after a
+    # favourite landed must disarm and stop, not re-favourite.
+    raw = open(NATIVE).read()
+    assert "Skip when a favourite just landed" in raw
+    assert "Stop, the favourite already landed" in raw
+    assert "states[fav].last_changed" in raw
+
+
 def test_memory_example_parses():
     path = os.path.join(os.path.dirname(__file__), "..", "examples",
                         "ma-active-player-memory.yaml")
