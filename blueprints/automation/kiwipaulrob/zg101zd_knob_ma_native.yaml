@@ -39,6 +39,9 @@ blueprint:
     registers; within the window after a favourite-hold, turns seek
     instead of voluming. A fast triple parses as `double` (next track)
     and may ALSO flip the mode (previous) — verify on install.
+    Press-turn seeks from the player's reported position: if it never
+    reports one (frozen media_position_updated_at), seeks land wrong —
+    fix the player feed, the knob cannot.
 
     Tested on HA 2026.10.4. Minimum version 2024.6.0 (input sections).
   domain: automation
@@ -426,8 +429,12 @@ actions:
                       upd: "{{ state_attr(target, 'media_position_updated_at') }}"
                       dur: "{{ state_attr(target, 'media_duration') | float(0) }}"
                       # media_position is sampled at updated_at: project forward
-                      # while playing so seeks land where the music actually is.
-                      live_pos: "{% if is_state(target, 'playing') and upd %}{{ pos + (as_timestamp(now()) - as_timestamp(upd)) }}{% else %}{{ pos }}{% endif %}"
+                      # while playing so seeks land where the music actually is —
+                      # but only from a FRESH sample (under 60 s old). A stale
+                      # or frozen updated_at means the player is not reporting
+                      # progress, and projecting from it catapults every seek
+                      # to the track end; fall back to the raw sample then.
+                      live_pos: "{% if is_state(target, 'playing') and upd and (as_timestamp(now()) - as_timestamp(upd)) < 60 %}{{ pos + (as_timestamp(now()) - as_timestamp(upd)) }}{% else %}{{ pos }}{% endif %}"
                       stepped: "{{ (live_pos | float) + (seek_step | float if fwd else -(seek_step | float)) }}"
                       seek_to: "{{ ([([stepped | float, 0.0] | max), dur | float] | min) if (dur | float > 0) else (stepped | float) }}"
                   # No duration (idle/stale player) means nowhere to seek: stop.

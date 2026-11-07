@@ -171,6 +171,16 @@ def test_hold_skips_continued_hold_echo():
     assert "states[fav].last_changed" in raw
 
 
+def test_seek_base_freshness_guard():
+    # Live bug: a player that never reports progress (frozen
+    # media_position_updated_at) makes the forward projection catapult
+    # every seek to the track end. Projection must require a fresh
+    # sample and fall back to the raw position otherwise.
+    raw = open(NATIVE).read()
+    assert "as_timestamp(upd)) < 60" in raw
+    assert "fix the player feed" in raw
+
+
 def test_memory_example_parses():
     path = os.path.join(os.path.dirname(__file__), "..", "examples",
                         "ma-active-player-memory.yaml")
