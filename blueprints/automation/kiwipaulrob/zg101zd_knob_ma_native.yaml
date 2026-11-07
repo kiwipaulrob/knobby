@@ -564,11 +564,14 @@ actions:
                     value_template: "{{ not wait.completed }}"
                   # Favourite via the MA integration's per-player button,
                   # resolved generically through the target's device — no
-                  # hardcoded button entity id to maintain.
+                  # hardcoded button entity id to maintain. The search
+                  # covers both US `favorite` and UK `favourite`
+                  # spellings (`search` takes a regex, `?` makes the
+                  # `u` optional).
                   - alias: Press the player's favourite button
                     action: button.press
                     target:
-                      entity_id: "{{ device_entities(device_id(target)) | select('search', 'favor') | list | first }}"
+                      entity_id: "{{ device_entities(device_id(target)) | select('search', 'favou?r') | list | first }}"
                   # Optional announce: the message ships prefilled and
                   # generic ({song}/{artist} become track/artist); it talks
                   # once a voice is picked, on the picked speaker or the
