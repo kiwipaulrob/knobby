@@ -130,9 +130,10 @@ engines ignore it. Clear the message, or leave the voice empty, for silence.
 
 ## Technique and quirks
 
-- **Press, beat, turn.** Hold the knob, pause a beat, then turn to seek.
-  Spinning the instant you press still nudges volume for the first
-  detent(s) — physics beats intent at that speed.
+- **Press and turn.** Turning the instant you press seeks cleanly in
+  command mode — early turns count, so no pause is needed. (In event
+  mode the detent(s) before the latch arms still nudge volume —
+  physics beats intent at that speed — so pause a beat there.)
 - **Triple-press flips the knob's mode** - This is a hack but it works
 - well. Triple click is reserved by firmware to change mode (event ↔ command).
 - Instead of sending an action — the blueprint watches the flip in both directions
