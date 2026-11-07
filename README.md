@@ -3,7 +3,7 @@
 Turn a Zigbee knob into a volume knob for Music Assistant: **turn** for
 volume, **press** for play/pause, **double-press** for next track,
 **triple-press** for previous track, **hold** to favourite the song (with optional announcement),
-**turn while holding** to seek through the track both foreward and back.
+**turn while holding** to seek through the track both forward and back.
 
 One blueprint import inside Home Assistant does it all — no Python, no
 extra service, no YAML editing. Built for the HOBEIAN ZG-101ZD and any
@@ -137,9 +137,10 @@ engines ignore it. Clear the message, or leave the voice empty, for silence.
   command mode — early turns count, so no pause is needed. (In event
   mode the detent(s) before the latch arms still nudge volume —
   physics beats intent at that speed — so pause a beat there.)
-- **Triple-press flips the knob's mode** - This is a hack but it works
-- well. Triple click is reserved by firmware to change mode (event ↔ command).
-- Instead of sending an action — the blueprint watches the flip in both directions
+- **Triple-press flips the knob's mode.** This is a hack but it works:
+  triple-click is reserved by firmware to change mode (event ↔ command)
+  instead of sending an action — the blueprint watches the flip in both
+  directions
   and fires previous-track twice (restart-current, then step back). A
   very fast triple parses as a double (next track) instead; slow down a
   touch if previous-track misfires.

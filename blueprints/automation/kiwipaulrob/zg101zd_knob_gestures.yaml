@@ -14,6 +14,12 @@ blueprint:
     knob WHILE held publishes color_temperature_step_up/down.
     If your knob publishes rotate_right/rotate_left instead, it is in
     event mode: triple-press the knob to switch it to command mode.
+
+    NOTE: for Music Assistant setups this generic blueprint is
+    superseded by zg101zd_knob_ma_native.yaml (same gestures plus
+    triple-press previous-track, press-and-turn seek, and favourites
+    with voice confirmation, with no relay needed). Kept for wiring
+    knob gestures to anything else.
   domain: automation
   source_url: https://github.com/kiwipaulrob/ma-fav-button/blob/main/blueprints/automation/kiwipaulrob/zg101zd_knob_gestures.yaml
   input:

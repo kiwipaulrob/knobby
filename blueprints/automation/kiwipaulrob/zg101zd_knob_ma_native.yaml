@@ -32,7 +32,8 @@ blueprint:
     volume+hold, so seek vs favourite is disambiguated by gesture
     shape: rotations while the seek latch is on seek instead of
     changing volume, and the favourite waits out the seek window to
-    make sure you are not turning. Technique: press, beat, turn.
+    make sure you are not turning. Technique: press and turn (pause a
+    beat first in event mode; in command mode no pause is needed).
     Residuals: the favourite lands ~2 s late; spinning the instant you
     press nudges volume for the first detent(s) before the hold
     registers; within the window after a favourite-hold, turns seek
@@ -70,8 +71,9 @@ blueprint:
         Room mode reads the knob's room from this entity, so the knob
         must be assigned to its room (Settings → Devices). Find it at
         Settings → Devices → your knob → entities (the one ending in
-        operation_mode): every Z2M device gets one, and triple-clicking
-        the knob is the only thing that flips it.
+        operation_mode): knobs like this one expose an
+        operation_mode select, and triple-clicking the knob is the only
+        thing that flips it.
       selector:
         entity:
           domain: select

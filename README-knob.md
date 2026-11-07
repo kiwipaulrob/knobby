@@ -163,7 +163,7 @@ One automation from
 |---|---|
 | `knob_action_topic` | MQTT action topic (`zigbee2mqtt/knob 2/action`) |
 | `mode_select` | Z2M operation-mode select (triple/previous-track dual-edge) |
-| `speaker_source` | `quality` endpoint / `knob_room` / fixed player |
+| `speaker_source` | `knob_room` (default) / `pick_players` / `pick_group` |
 | `exclude_players` | Entity ids never targeted (TVs) |
 | `seek_latch` | `input_boolean` arming held-turn seek |
 | `last_turn_helper` | `input_datetime` stamped per rotation (hold look-back) |

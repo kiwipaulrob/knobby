@@ -64,8 +64,9 @@ Ask for these; each has a fallback the user can accept:
 Give the user one of these two paths:
 
 - **Import link** (easiest): open
-  `https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https://github.com/kiwipaulrob/ma-fav-button/blob/main/blueprints/automation/kiwipaulrob/zg101zd_knob_ma_native.yaml`
-  in a browser and click Import / Preview.
+  `https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fraw.githubusercontent.com%2Fkiwipaulrob%2Fma-fav-button%2Fmain%2Fblueprints%2Fautomation%2Fkiwipaulrob%2Fzg101zd_knob_ma_native.yaml`
+  in a browser and click Import / Preview. (The link must be the raw
+  file URL — the normal GitHub page URL serves HTML, not the blueprint.)
 - **Manual**: copy the file into HA at
   `config/blueprints/automation/kiwipaulrob/zg101zd_knob_ma_native.yaml`,
   then Settings → Automations & scenes → Blueprints → Reload (⋮ menu).
@@ -80,7 +81,8 @@ blueprint → pick the knob blueprint.
 2. **Knob operation_mode select** — required. Path: Settings → Devices →
    knob → entities; pick the entry ending in `operation_mode`.
    Triple-press is the only gesture that flips it, which is how the
-   blueprint detects triple-presses.
+   blueprint detects triple-presses. (Only knobs exposing that select
+   have one — most other Z2M devices don't.)
 3. **Speaker source** (`Which speakers can the knob control?`) — from the
    speaker setup above:
    - room → `Knob's room (recommended)`. Nothing else to pick; the knob
@@ -94,9 +96,16 @@ blueprint → pick the knob blueprint.
    create it: Settings → Devices & services → Helpers → + Create helper →
    Toggle, named e.g. "Knob seek" (one per knob; leave it off — the
    blueprint switches it on and off by itself). Then pick it here. Explain
-   in one line: press, pause a beat, then turn to seek; rotations while
+   in one line: press and turn to seek (pause a beat first in event
+   mode; in command mode no pause is needed); rotations while
    held seek instead of changing volume, and the favourite waits out the
    2-second hold-to-seek window to make sure they weren't turning.
+4b. **Recent-turn stamp.** Same Helpers screen → + Create helper →
+   Date and/or time, named e.g. "Knob last turn" — tick **both Date and
+   Time** (date-only silently disables it: the stamp always reads as
+   midnight, so the hold step never sees a recent turn). Pick it in
+   Tuning → Recent-turn stamp helper. Without it, only turns *after*
+   the hold cancel the favourite.
 5. **Memory (only if several speakers share the knob).** Create a Text
    helper (Helpers → + Create helper → Text), pick it in the memory field,
    and switch on **"Knob remembers last speaker"**. From then on every
@@ -107,11 +116,15 @@ blueprint → pick the knob blueprint.
    after each favourite, on the picked speaker (or the knob's current
    speaker if that box is empty). **Announce speed** slider: 0.5–1.5,
    default 1.0 = natural pace (0.8 = slower, 1.2 = faster) — passed to the
-   voice as Piper/Wyoming `length_scale`, so other engines ignore it. For silence: clear the message or leave the voice
+   voice as Piper/Wyoming `length_scale`, so it is only sent to
+   Piper/Wyoming voices — other engines never receive it (Cloud would
+   reject it) and always speak at natural pace. For silence: clear the message or leave the voice
    empty.
 7. **Tuning** (collapsed): Volume step, default 1 dB (0.5–3 dB);
    Seek step, default 10 s (5–60 s); Hold-to-seek window, default 2 s
-   (longer is more forgiving, but the favourite lands that much later).
+   (longer is more forgiving, but the favourite lands that much later);
+   Recent-turn stamp helper from step 4b above (empty = only turns
+   *after* the hold cancel the favourite).
    Leave alone unless the user complains volume moves too fast/slow.
 
 Save with a clear name, e.g. "Lounge knob — volume + favourites".
@@ -136,7 +149,8 @@ Save with a clear name, e.g. "Lounge knob — volume + favourites".
 - **Seeking instead of volume (or vice versa):** the latch toggle wasn't
   created/picked, or the hold wasn't held a full beat before turning.
 - **Triple-press does nothing:** wrong `operation_mode` entity picked.
-  Every Z2M device has one, and triple-clicking the knob is the only thing
+  Only knobs exposing that select have one — every other Z2M device
+  doesn't — and triple-clicking the knob is the only thing
   that flips it — watch the select flip event↔command in HA while
   triple-pressing to confirm.
 - **No voice confirmation:** voice entity empty, message cleared, or the
