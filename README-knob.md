@@ -96,6 +96,17 @@ These were found the hard way, in live traces. Design around them.
    but *above* its users — referencing a variable declared later
    renders empty (this once broke `tts.speak` with "expected 'all'
    or 'none'").
+   - Template variables always render to strings: a `from_json`-parsed
+   mapping stringifies to its repr on output, so `is mapping`/`.get()`
+   on a downstream variable never matches. Validate once, keep the raw
+   string, and re-parse from source at each use site behind the guard
+   (this silently disabled the first version of the position clock —
+   caught by the offline render sim, §5).
+   - Never branch `{% if %}` on a rendered boolean: `"False"` is a
+   non-empty (truthy) string. Render `1`/`0` and compare numerically.
+   - A missing attribute renders the string `"None"` — truthy, and fatal
+   to `as_timestamp`. Prove it looks like a timestamp (`is string and
+   '-' in x`) before parsing.
 
 ## 4. Volume control
 
@@ -115,6 +126,19 @@ These were found the hard way, in live traces. Design around them.
 
 - Seek step is **±10 s per detent**, clamped to the track duration;
   seeks are skipped entirely for duration-less streams.
+- The player's position feed cannot be trusted mid-track: Music
+  Assistant only refreshes `media_position` in the first seconds of
+  each song, so after the first minute the sample is frozen and any
+  forward projection catapults the seek to the track end. The
+  automation therefore keeps its **own position clock** in an
+  optional `input_text` helper (`input_text.knob_2_position_clock`)
+  holding `{title, position, wall-clock, state}` JSON. Each seek
+  extrapolates from the clock while it names the playing track, else
+  from a fresh (< 60 s) feed sample, else from the raw sample — then
+  clamps to the duration. The clock is anchored on every seek,
+  frozen on pause, re-anchored on play, and blanked on track change
+  and after voice announcements (which restart the audio flow). With
+  no helper picked, behaviour is the old feed-only fallback.
 - Pressed-turns (`color_temperature_*`) seek unconditionally (§2).
   Unpressed turns seek only while the **seek latch**
   (`input_boolean.knob_2_seek_latch`) is freshly armed by a hold —
@@ -168,6 +192,7 @@ One automation from
 | `seek_latch` | `input_boolean` arming held-turn seek |
 | `last_turn_helper` | `input_datetime` stamped per rotation (hold look-back) |
 | `memory_helper` / `remember_speaker` | Last-used-speaker recall |
+| `position_clock` | Optional `input_text` holding the knob's own `{title, position, wall-clock, state}` JSON (seek anchor — §5) |
 | `announce_message/voice/speaker/speed` | Confirmation text, `tts.*` engine, target, pace |
 
 Helpers are plain HA entities (`input_boolean`, `input_datetime`,
@@ -184,6 +209,8 @@ Automations → Reload. No restarts, no hosted code.
 | `Invalid options found: ['length_scale']` | Custom speed + non-Piper voice (fixed: speed branch is Piper/Wyoming-only) |
 | Announce plays silence | Target group the speaker isn't a member of (ghost members after restart) |
 | Triple-press does nothing | `operation_mode` select stale — it can read `event` while the device speaks command |
+| Seeks land at/near the track end after the first minute | Dead position feed (MA refreshes only at track start) — pick the `position_clock` helper so seeks extrapolate from the knob's own anchor (§5) |
+| Seeks land a fixed step past zero | `None` position base — same dead-feed family; clock or fresh sample required, never a stale projection |
 | Volume jumps on first detent from silence | Silence-kick constant — intentional |
 | A run dies in a template | `as_timestamp()` on `None`, or a variable referenced above its definition |
 
