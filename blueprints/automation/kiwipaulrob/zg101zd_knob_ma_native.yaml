@@ -1,5 +1,5 @@
 blueprint:
-  name: Zigbee smart knob to Music Assistant (native, no relay)
+  name: Knobby — Zigbee smart knob for Music Assistant (ZG-101ZD / Moes via Z2M)
   description: >
     Wire a Zigbee2MQTT smart knob (HOBEIAN / Moes ZG-101ZD and similar
     Tuya knobs) straight to Music Assistant with no extra software: no
