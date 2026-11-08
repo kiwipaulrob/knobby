@@ -14,10 +14,11 @@ blueprint:
     below. 2) Create one `input_boolean` helper as the seek latch
     (e.g. `input_boolean.knob_seek`, one per knob). 3) Pick the speaker
     source: the knob's room (default), hand-picked players, or a group.
-    4) Optionally list players the knob must never touch (TVs,
-    displays) — applies in every mode. 5) Optionally point the memory
-    at an `input_text` (memory keeper in
-    `examples/ma-active-player-memory.yaml`) or leave it empty to skip.
+    4) Optionally list players the knob must never touch
+    (such as TVs, displays) — applies in every mode. 5) Optionally
+    point the memory at an `input_text` helper (any name) or leave it
+    empty to skip — the blueprint remembers playback started outside
+    the knob by itself.
 
     Every deliberate triple-press TOGGLES the knob's operation_mode
     (event<->command) instead of emitting an action — verified live
@@ -121,8 +122,7 @@ blueprint:
     speaker_group:
       name: Speaker group
       description: >
-        Group helper with your MA speaker media_players. Pairs with
-        the memory keeper (examples/ma-active-player-memory.yaml).
+        Group helper with your MA speaker media_players.
         Only used when "Which speakers can the knob control?" is set
         to Choose a group.
       default:
@@ -147,11 +147,10 @@ blueprint:
       description: >
         input_text helper holding the last-used speaker. The knob
         writes it itself when "Knob remembers last speaker" below is
-        on; the memory-keeper automation
-        (examples/ma-active-player-memory.yaml) additionally catches
-        playback started outside the knob (phone app, voice). Leave
-        empty to skip — the knob falls back to the first candidate when
-        nothing is playing.
+        on; the blueprint itself additionally catches playback started
+        outside the knob (phone app, voice). Leave empty to skip —
+        the knob falls back to the first candidate when nothing is
+        playing.
       default:
       selector:
         entity:
@@ -164,8 +163,8 @@ blueprint:
         is idle — the knob writes its own diary, one tiny write per
         gesture. Needs the memory helper set; without it this does
         nothing. Leave off with a single speaker (the fallback already
-        lands correctly) or while testing. The separate memory-keeper
-        automation stays useful for playback started outside the knob.
+        lands correctly) or while testing. Playback started outside the
+        knob is remembered automatically whenever the helper above is set.
       default: false
       selector:
         boolean:
@@ -320,6 +319,10 @@ triggers:
     from: command
     to: event
     id: triple_rev
+  - trigger: template
+    value_template: >
+      {{ expand(integration_entities('music_assistant') | select('search', 'media_player') | reject('in', !input exclude_players) | list) | selectattr('state', 'eq', 'playing') | map(attribute='entity_id') | sort | join(',') }}
+    id: keeper
 
 variables:
   event_map:
@@ -416,10 +419,22 @@ variables:
 conditions:
   - alias: "Knob input in a known vocabulary, and at least one candidate speaker"
     condition: template
-    value_template: "{{ members | count > 0 and (trigger.id in ['triple', 'triple_rev'] or trigger.payload in event_map) }}"
+    value_template: "{{ members | count > 0 and (trigger.id in ['triple', 'triple_rev', 'keeper'] or trigger.payload in event_map) }}"
 
 actions:
   - choose:
+      - alias: "External playback: remember the speaker"
+        conditions: "{{ trigger.id == 'keeper' }}"
+        sequence:
+          - alias: "Only when the memory helper is set and something knob-eligible is playing"
+            condition: template
+            value_template: "{{ memory and now_playing }}"
+          - alias: "Remember the first playing speaker"
+            action: input_text.set_value
+            target:
+              entity_id: "{{ memory }}"
+            data:
+              value: "{{ now_playing[0] }}"
       - alias: "Triple-press: previous track (fires on either mode flip)"
         conditions: "{{ trigger.id in ['triple', 'triple_rev'] }}"
         sequence:

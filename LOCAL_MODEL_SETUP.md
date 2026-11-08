@@ -166,8 +166,8 @@ Save with a clear name, e.g. "Lounge knob — volume + favourites".
 ## Files in this repo you may point the user at
 
 - `README.md` — the human-readable setup guide (same steps, more prose).
-- `examples/ma-active-player-memory.yaml` — optional tracker automation
-  that also records playback started outside the knob (phone app, voice
+- Playback memory is built into the knob blueprint (memory helper input) —
+  it also records playback started outside the knob (phone app, voice
   assistant). Only needed with several speakers.
 - `examples/ma-gesture-wiring.yaml`, `examples/ha-automations.yaml` —
   reference wirings, not required for setup.

@@ -199,30 +199,16 @@ def test_stamp_guard_is_boolean():
     assert raw.count("(turn_stamp | default('')) != ''") == 2
 
 
-def test_memory_example_parses():
-    path = os.path.join(os.path.dirname(__file__), "..", "examples",
-                        "ma-active-player-memory.yaml")
-    with open(path) as f:
-        doc = yaml.safe_load(f)
-    assert doc["alias"] == "MA active player memory"
-    assert "input_text.ma_active_player" in yaml.safe_dump(doc)
-    assert "group.ma_speakers" in yaml.safe_dump(doc)
-
-
-def test_keeper_blueprint_picker_inputs():
-    path = os.path.join(BP_DIR, "ma_active_player_memory.yaml")
-    bp = load(path)
-    assert bp["blueprint"]["domain"] == "automation"
-    assert bp["blueprint"]["homeassistant"]["min_version"] == "2024.6.0"
-    inputs = bp["blueprint"]["input"]
-    assert set(inputs) == {"speakers", "memory"}
-    assert inputs["speakers"]["selector"]["entity"]["multiple"] is True
-    assert inputs["memory"]["selector"]["entity"]["filter"] == [
-        {"domain": "input_text"}]
-    dumped = yaml.safe_dump(
-        yaml.safe_load(open(path).read().replace("!input ", "INPUT:")))
-    assert "group.ma_speakers" not in dumped
-    assert "input_text.ma_active_player" not in dumped
+def test_keeper_folded_into_native():
+    bp = load(NATIVE)
+    trig_ids = [t.get("id") for t in bp["triggers"]]
+    assert "keeper" in trig_ids
+    keeper = next(t for t in bp["triggers"] if t.get("id") == "keeper")
+    assert "playing" in keeper["value_template"]
+    assert "keeper" in bp["conditions"][0]["value_template"]
+    dumped = yaml.safe_dump(bp)
+    assert "now_playing[0]" in dumped
+    assert "ma-active-player-memory" not in dumped
 
 
 def _walk_templates(node, out):

@@ -175,8 +175,7 @@ If the automation never triggered (no trace exists), give the knob's action sens
 ## Files
 
 - `blueprints/automation/kiwipaulrob/zg101zd_knob_ma_native.yaml` — the blueprint
-- `examples/ma-active-player-memory.yaml` — optional memory keeper
-  (tracks the playing speaker across restarts; needs an `input_text` helper)
+- Playback memory is built into the knob blueprint (memory helper input, any `input_text` name) — no extra file or setup.
 
 ## License
 
