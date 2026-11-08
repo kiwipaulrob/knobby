@@ -131,14 +131,13 @@ These were found the hard way, in live traces. Design around them.
   each song, so after the first minute the sample is frozen and any
   forward projection catapults the seek to the track end. The
   automation therefore keeps its **own position clock** in an
-  optional `input_text` helper (`input_text.knob_2_position_clock`)
+  `input_text` helper (`input_text.knob_2_position_clock`)
   holding `{title, position, wall-clock, state}` JSON. Each seek
   extrapolates from the clock while it names the playing track, else
   from a fresh (< 60 s) feed sample, else from the raw sample — then
   clamps to the duration. The clock is anchored on every seek,
   frozen on pause, re-anchored on play, and blanked on track change
-  and after voice announcements (which restart the audio flow). With
-  no helper picked, behaviour is the old feed-only fallback.
+  and after voice announcements (which restart the audio flow).
   Live-verified on hardware: hold-turn seeks land ±10 s per detent
   mid-track, and the helper cycled anchor→blank exactly as designed.
 - Pressed-turns (`color_temperature_*`) seek unconditionally (§2).
@@ -194,7 +193,7 @@ One automation from
 | `seek_latch` | `input_boolean` arming held-turn seek |
 | `last_turn_helper` | `input_datetime` stamped per rotation (hold look-back) |
 | `memory_helper` / `remember_speaker` | Last-used-speaker recall |
-| `position_clock` | Optional `input_text` holding the knob's own `{title, position, wall-clock, state}` JSON (seek anchor — §5) |
+| `position_clock` | Required `input_text` holding the knob's own `{title, position, wall-clock, state}` JSON (seek anchor — §5) |
 | `announce_message/voice/speaker/speed` | Confirmation text, `tts.*` engine, target, pace |
 
 Helpers are plain HA entities (`input_boolean`, `input_datetime`,

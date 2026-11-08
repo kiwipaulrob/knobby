@@ -1,31 +1,39 @@
 blueprint:
   name: Knobby — Zigbee smart knob for Music Assistant (ZG-101ZD / Moes via Z2M)
-  description: >
+  description: |
     Wire a Zigbee2MQTT smart knob (HOBEIAN / Moes ZG-101ZD and similar
     Tuya knobs) straight to Music Assistant with no extra software: no
-    relay, no Python, no add-on, nothing to host. Rotate for volume
-    with a ~1 dB logarithmic taper, press for play/pause, double-press
-    for next track, triple-press for previous track, bare hold to
-    favourite the current song, turn-while-held to seek with duration
-    clamping.
+    relay, no Python, no add-on, nothing to host.
 
-    **Setup (2 minutes):** 1) Assign the knob to its room in HA
-    (Settings → Devices) — room mode reads it from the mode select
-    below. 2) Create one `input_boolean` helper as the seek latch
-    (e.g. `input_boolean.knob_seek`, one per knob). 3) Pick the speaker
-    source: the knob's room (default), hand-picked players, or a group.
-    4) Optionally list players the knob must never touch
-    (such as TVs, displays) — applies in every mode. 5) Optionally
-    point the memory at an `input_text` helper (any name) or leave it
-    empty to skip — the blueprint remembers playback started outside
-    the knob by itself.
+    What it does:
+
+    - Rotate for volume (~1 dB logarithmic taper), press for
+      play/pause, double-press for next track, triple-press for
+      previous track.
+    - Bare hold favourites the current song; turn-while-held seeks
+      with duration clamping.
+
+    Setup (2 minutes):
+
+    1. Assign the knob to its room (Settings → Devices) — room mode
+       reads it from the mode select below.
+    2. Create three helpers (Settings → Devices & services → Helpers,
+       one set per knob): a Toggle for the seek latch, an
+       input_datetime storing date AND time for the turn stamp, and
+       an input_text for the position clock.
+    3. Pick the speaker source: the knob's room (default), hand-picked
+       players, or a group.
+    4. Optionally list players the knob must never touch (TVs,
+       displays) — applies in every mode.
+    5. Optionally point the memory at an input_text helper, or leave
+       it empty to skip.
 
     Every deliberate triple-press TOGGLES the knob's operation_mode
     (event<->command) instead of emitting an action — verified live
     Nov 2026 — so the blueprint watches BOTH flip directions and never
     writes the mode back (remote mode-set does not land on this
-    firmware). The drift means the knob speaks two vocabularies
-    (event: rotate_right/rotate_left/single/double/hold; command:
+    firmware). The knob therefore speaks two vocabularies (event:
+    rotate_right/rotate_left/single/double/hold; command:
     brightness_step_up/down/toggle/double/hue_move); both are mapped,
     so every gesture works in either mode.
 
@@ -40,18 +48,20 @@ blueprint:
     registers; within the window after a favourite-hold, turns seek
     instead of voluming. A fast triple parses as `double` (next track)
     and may ALSO flip the mode (previous) — verify on install.
-    Press-turn seeks from the knob's own position clock (optional
-    input_text below): the player's feed only refreshes position in
-    the first seconds of each track, so the knob tracks it itself —
-    anchoring on fresh feed samples when they exist, extrapolating
-    while playing, and re-anchoring on every seek it makes. Without
-    the clock helper it falls back to the raw reported position.
+
+    Press-turn seeks from the knob's own position clock: the player's
+    feed only refreshes position in the first seconds of each track,
+    so the knob tracks it itself — anchoring its clock on fresh feed
+    samples, extrapolating while playing, and re-anchoring on every
+    seek, pause, and track change.
 
     Tested on HA 2026.10.4. Minimum version 2024.6.0 (input sections).
 
-    Version 1.0 (Nov 2026, live-verified on hardware). Changelog: 1.0 —
-    own position clock beats the dead feed; turn-stamp guards fixed
-    (date AND time); announce speed gated to Piper/Wyoming.
+    Version 1.1 (Nov 2026, live-verified on hardware). Changelog: 1.1 —
+    helper inputs moved out of Tuning, position clock is now standard,
+    descriptions tidied. 1.0 — own position clock beats the dead feed;
+    turn-stamp guards fixed (date AND time); announce speed gated to
+    Piper/Wyoming.
   domain: automation
   source_url: https://github.com/kiwipaulrob/ma-fav-button/blob/main/blueprints/automation/kiwipaulrob/zg101zd_knob_ma_native.yaml
   author: kiwipaulrob
@@ -61,34 +71,25 @@ blueprint:
     knob_action_topic:
       name: Knob action MQTT topic
       description: >
-        The knob's MQTT action topic: zigbee2mqtt/<friendly-name>/action
-        using the name shown on the knob's Zigbee2MQTT device page
-        (e.g. a knob called "knob" gives zigbee2mqtt/knob/action —
-        spaces in the name appear as underscores). To confirm: open the
-        knob in the Zigbee2MQTT UI and press it — the Action field under
-        Exposes updates with each press. If you changed Z2M's base topic
-        (Settings → MQTT), use that instead of zigbee2mqtt. Payloads are
-        plain-text action strings in either operation mode (see above).
+        The knob's MQTT action topic: zigbee2mqtt/<name>/action, using
+        the name on the knob's Zigbee2MQTT device page (spaces become
+        underscores, e.g. zigbee2mqtt/knob/action). Confirm on the Z2M
+        device page — the Action field updates with each press. If you
+        changed Z2M's base topic, use that instead.
       default: zigbee2mqtt/knob/action
       selector:
         text:
     mode_select:
       name: Knob operation-mode select
       description: >
-        The Z2M operation_mode select entity for this knob (e.g.
-        select.knob_2_operation_mode). Build it from the Z2M device
-        name: lowercase, spaces to underscores, as
-        select.<name>_operation_mode — a re-paired knob gains a _2/_3
-        suffix, so if unsure open the knob's Z2M device page and take
-        the entity ending in operation_mode. Triple-press emits no action —
-        it only flips this select event<->command — so the blueprint
-        fires on BOTH flip directions. The blueprint never writes it.
-        Room mode reads the knob's room from this entity, so the knob
-        must be assigned to its room (Settings → Devices). Find it at
-        Settings → Devices → your knob → entities (the one ending in
-        operation_mode): knobs like this one expose an
-        operation_mode select, and triple-clicking the knob is the only
-        thing that flips it.
+        The Z2M operation_mode select for this knob (e.g.
+        select.knob_2_operation_mode): lowercase device name, spaces to
+        underscores, ending in operation_mode (a re-paired knob gains a
+        _2/_3 suffix — check the Z2M device page if unsure).
+        Triple-press only flips this select event<->command, so the
+        blueprint fires on both flip directions and never writes it.
+        The knob must be assigned to its room (Settings → Devices) for
+        room mode.
       selector:
         entity:
           domain: select
@@ -110,11 +111,10 @@ blueprint:
     speaker_pick:
       name: Players
       description: >
-        The MA players the knob may control. Resolution order is
-        playing → remembered → this list in order, so list your
-        most-used speaker first. Leave TVs and displays out, or add
-        them to Never-pick below. Only used when "Which speakers can
-        the knob control?" is set to Choose players.
+        The MA players the knob may control, most-used first.
+        Resolution is playing → remembered → this list in order. Leave
+        TVs and displays out (or add them to Never-pick). Only used
+        with Choose players above.
       default: []
       selector:
         entity:
@@ -126,9 +126,8 @@ blueprint:
     speaker_group:
       name: Speaker group
       description: >
-        Group helper with your MA speaker media_players.
-        Only used when "Which speakers can the knob control?" is set
-        to Choose a group.
+        Group helper holding your MA speaker players. Only used with
+        Choose a group above.
       default:
       selector:
         entity:
@@ -149,12 +148,11 @@ blueprint:
     memory_helper:
       name: Active-player memory (optional)
       description: >
-        input_text helper holding the last-used speaker. The knob
-        writes it itself when "Knob remembers last speaker" below is
-        on; the blueprint itself additionally catches playback started
-        outside the knob (phone app, voice). Leave empty to skip —
-        the knob falls back to the first candidate when nothing is
-        playing.
+        input_text holding the last-used speaker. The knob writes it
+        when "Knob remembers last speaker" is on, and playback started
+        outside the knob (phone, voice) is caught automatically. Leave
+        empty to skip — the knob then uses the first candidate when
+        idle.
       default:
       selector:
         entity:
@@ -162,46 +160,63 @@ blueprint:
     remember_speaker:
       name: Knob remembers last speaker (optional, off by default)
       description: >
-        When on, every gesture writes the speaker just used into the
-        memory helper above, so the knob finds it next time everything
-        is idle — the knob writes its own diary, one tiny write per
-        gesture. Needs the memory helper set; without it this does
-        nothing. Leave off with a single speaker (the fallback already
-        lands correctly) or while testing. Playback started outside the
-        knob is remembered automatically whenever the helper above is set.
+        When on, every gesture records the speaker just used, so the
+        knob finds it next time everything is idle. Needs the memory
+        helper; leave off with a single speaker.
       default: false
       selector:
         boolean:
     seek_latch:
       name: Seek latch helper
       description: >
-        input_boolean helper that arms seek mode while the knob is
-        held — one per knob. Create it first: Settings → Devices &
-        services → Helpers → + Create helper → Toggle, named e.g.
-        "Knob seek" (a second knob gets its own, e.g. "Knob 2 seek").
-        Leave it off; the blueprint switches it on and off by itself.
-        Rotations while it is on seek instead of changing volume.
-        Reads are time-bounded, so a latch stuck on by a restart
-        self-heals after the seek window.
+        input_boolean that arms seek mode while the knob is held — one
+        per knob. Create it first (Helpers → Toggle, e.g. "Knob seek")
+        and leave it off; the blueprint switches it by itself.
+        Rotations while it is on seek instead of changing volume, and
+        a latch stuck on by a restart self-heals after the seek window.
       selector:
         entity:
           domain: input_boolean
+    last_turn_helper:
+      name: Recent-turn stamp helper
+      description: >
+        An input_datetime the knob stamps on every rotation. A hold
+        arriving just after turns was a long seek, not a new favourite
+        — without this, press-and-rotate crossing the knob's ~3 s hold
+        threshold favourites. Create an input_datetime and pick it
+        here; empty keeps the old forward-watch-only behaviour. It MUST
+        store date AND time — tick both on (date-only reads as midnight
+        and silently disables this).
+      default:
+      selector:
+        entity:
+          domain: input_datetime
+    position_clock:
+      name: Position clock helper
+      description: >
+        An input_text the knob uses as its own position memory, so
+        press-turn seeks land right even when the player stops reporting
+        progress mid-track (Music Assistant only refreshes position in
+        the first seconds of each track). The knob anchors it on fresh
+        feed samples, extrapolates while playing, and re-anchors on
+        every seek, pause, and track change — all by itself. Create an
+        input_text helper (one per knob) and pick it here.
+      selector:
+        entity:
+          domain: input_text
     announce_message:
       name: Announce message (optional)
       description: >
-        Said aloud after a hold favourites the song. {song} becomes
-        the track name and {artist} the artist — e.g. the default reads
-        "Added Dreams by Fleetwood Mac to favourites" (missing names
-        degrade gracefully). Clear it for silence; the voice below and
-        a speaker decide whether it talks at all.
+        Said aloud after a hold favourites the song. {song} and
+        {artist} fill in from the track (missing names degrade
+        gracefully). Clear for silence — with no voice below it stays
+        silent anyway.
       default: "Added {song} by {artist} to favourites"
       selector:
         text:
     announce_voice:
       name: Announce voice (optional)
-      description: >
-        Which voice says it (e.g. tts.piper). Empty = silent, even
-        with a message above.
+      description: Which voice says it (e.g. tts.piper). Empty = silent.
       default:
       selector:
         entity:
@@ -209,11 +224,9 @@ blueprint:
     announce_speaker:
       name: Announce speaker (optional)
       description: >
-        Which speaker says it — empty means the knob's current speaker
-        (whatever the speaker choice above resolved to for this press).
-        Must be a Music Assistant player: the confirmation goes through
-        MA's announcement service with the pre-announce chime off, which
-        only targets MA players. Never a TV.
+        Which speaker says it — empty means the knob's current speaker.
+        Must be a Music Assistant player (announcements go through MA
+        with the chime off). Never a TV.
       default:
       selector:
         entity:
@@ -221,14 +234,9 @@ blueprint:
     announce_speed:
       name: Announce speed (optional)
       description: >
-        How fast the favourite confirmation is spoken, as a multiple
-        of the voice's natural pace (0.8 = slower, 1.2 = faster).
-        Passed to the voice as Piper/Wyoming `length_scale` (its
-        inverse: higher length means slower speech), so it only affects
-        Piper/Wyoming voices — other engines ignore it. 1.0 = natural
-        pace. Note: speeds other than 1.0 only apply to Piper/Wyoming
-        voices (HA voice path); other engines ignore the speed and stay
-        chime-free.
+        How fast the confirmation is spoken (1.0 = natural pace). Only
+        Piper/Wyoming voices honour it (their length_scale); other
+        engines ignore it and stay chime-free.
       default: 1
       selector:
         number:
@@ -266,9 +274,9 @@ blueprint:
         seek_window:
           name: Hold-to-seek window
           description: >
-            How long after a hold turns seek (and the favourite waits
-            to make sure you are not turning). Longer is more forgiving
-            of pause-then-turn; the favourite lands this much later.
+            How long after a hold turns seek (and the favourite waits to
+            make sure you are not turning). Longer forgives
+            pause-then-turn; the favourite lands this much later.
           default:
             hours: 0
             minutes: 0
@@ -276,38 +284,6 @@ blueprint:
           selector:
             duration:
               enable_day: false
-        last_turn_helper:
-          name: Recent-turn stamp helper
-          description: >
-            An input_datetime the knob stamps on every rotation. A hold
-            arriving just after turns was a seek that ran long, not a
-            new favourite — without this, every press-and-rotate that
-            crosses the knob's ~3 s hold threshold favourites. Create
-            an input_datetime helper and pick it here; empty keeps the
-            old forward-watch-only behaviour. The helper MUST store date
-            AND time — tick both on when creating it (HA offers date-only,
-            which silently disables this fix: a date-only stamp always
-            reads as midnight, so the hold step never sees a recent turn).
-          default:
-          selector:
-            entity:
-              domain: input_datetime
-        position_clock:
-          name: Position clock helper
-          description: >
-            An input_text the knob uses as its own position memory, so
-            press-turn seeks land right even when the player stops
-            reporting progress mid-track (Music Assistant only refreshes
-            position in the first seconds of each track). The knob
-            anchors it on fresh feed samples, extrapolates while
-            playing, and re-anchors on every seek, pause, and track
-            change — all by itself. Create an input_text helper and
-            pick it here; leave empty to keep the old feed-only
-            behaviour.
-          default:
-          selector:
-            entity:
-              domain: input_text
 
 triggers:
   - trigger: mqtt

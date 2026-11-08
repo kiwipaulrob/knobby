@@ -60,7 +60,8 @@ def test_native_blueprint_inputs():
     top = bp["blueprint"]["input"]
     for key in ("knob_action_topic", "mode_select", "speaker_source",
                 "speaker_pick", "speaker_group", "exclude_players",
-                "memory_helper", "remember_speaker", "seek_latch", "announce_message",
+                "memory_helper", "remember_speaker", "seek_latch",
+                "last_turn_helper", "position_clock", "announce_message",
                 "announce_voice", "announce_speaker", "announce_speed", "tuning"):
         assert key in top, key
     assert top["knob_action_topic"]["default"] == "zigbee2mqtt/knob/action"
@@ -80,12 +81,12 @@ def test_native_blueprint_inputs():
     assert top["announce_speed"]["default"] == 1
     # Every optional input must carry a default (possibly null): HA refuses
     # to generate an automation from the blueprint when a default-less
-    # input is not provided ("Missing input ..."). Only the two mandatory
-    # inputs (mode_select, seek_latch) may lack one.
+    # input is not provided ("Missing input ..."). Only the mandatory
+    # inputs (mode_select, seek_latch, position_clock) may lack one.
     for key, inp in top.items():
         if inp is None or "input" in inp:
             continue
-        if key in ("mode_select", "seek_latch"):
+        if key in ("mode_select", "seek_latch", "position_clock"):
             continue
         assert "default" in inp, key
     assert top["announce_speed"]["selector"] == {"number": {"min": 0.5,
@@ -93,9 +94,11 @@ def test_native_blueprint_inputs():
                                                            "step": 0.1}}
     tuning = top["tuning"]
     assert tuning.get("collapsed") is True
-    for key in ("volume_db_per_detent", "seek_seconds", "seek_window",
-                "position_clock"):
+    for key in ("volume_db_per_detent", "seek_seconds", "seek_window"):
         assert key in tuning["input"], key
+    # The helper inputs live in the main body, not under Tuning.
+    assert top["last_turn_helper"]["selector"] == {"entity": {"domain": "input_datetime"}}
+    assert "default" not in top["position_clock"]
     assert tuning["input"]["volume_db_per_detent"]["default"] == 1
     assert tuning["input"]["seek_seconds"]["default"] == 10
     assert tuning["input"]["seek_window"]["default"] == {"hours": 0,
