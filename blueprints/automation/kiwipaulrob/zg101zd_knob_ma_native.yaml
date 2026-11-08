@@ -422,17 +422,34 @@ actions:
         conditions: "{{ trigger.id in ['triple', 'triple_rev'] }}"
         sequence:
           # MA treats a lone previous as restart-current once past its
-          # restart threshold, so fire twice: the first restarts, the
-          # second steps back. Mirrors the relay's dim_prev behaviour.
-          - alias: "Previous (restarts the current track)"
+          # restart threshold, so consult the position clock (clock,
+          # else fresh feed, else raw sample — same order as seek):
+          # near the start a single previous steps straight back with
+          # no restart-blip; further in, fire twice (first restarts,
+          # second steps back). Mirrors the relay's dim_prev behaviour
+          # for the far-in case. Non-playing or unknown position takes
+          # the safe double-fire.
+          - variables:
+              t_pos: "{{ state_attr(target, 'media_position') | float(0) }}"
+              t_upd: "{{ state_attr(target, 'media_position_updated_at') }}"
+              t_now: "{{ as_timestamp(now()) }}"
+              t_feed_ts: "{{ as_timestamp(t_upd) if (t_upd is string and '-' in t_upd) else 0 }}"
+              t_feed_ok: "{{ 1 if (is_state(target, 'playing') and t_feed_ts | float > 0 and (t_now | float - t_feed_ts | float) < 60) else 0 }}"
+              t_clock_ok: "{{ 1 if (clk_t == cur_title and cur_title != '' and clk_s | int == 1 and is_state(target, 'playing') and clk_w | float > 0) else 0 }}"
+              t_base: "{% if t_clock_ok | int == 1 %}{{ [clk_p | float + (t_now | float - clk_w | float), 0.0] | max }}{% elif t_feed_ok | int == 1 %}{{ t_pos | float + (t_now | float - t_feed_ts | float) }}{% else %}{{ t_pos }}{% endif %}"
+              t_near_start: "{{ 1 if (is_state(target, 'playing') and t_base | float(0) <= 5) else 0 }}"
+          - alias: "Previous (steps straight back near the track start)"
             action: media_player.media_previous_track
             target:
               entity_id: "{{ target }}"
-          - delay: "00:00:02"
-          - alias: "Previous again (steps back)"
-            action: media_player.media_previous_track
-            target:
-              entity_id: "{{ target }}"
+          - alias: "Previous again when further in (first only restarted)"
+            choose:
+              - conditions: "{{ t_near_start | int == 0 }}"
+                sequence:
+                  - delay: "00:00:02"
+                  - action: media_player.media_previous_track
+                    target:
+                      entity_id: "{{ target }}"
           # Same as double-press: the track changes, blank anchor.
           - alias: Invalidate the position clock (track changing)
             choose:

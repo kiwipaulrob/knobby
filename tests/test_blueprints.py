@@ -191,6 +191,16 @@ def test_seek_base_freshness_guard():
     assert "live_pos" not in raw
 
 
+def test_triple_previous_consults_position_clock():
+    # Triple-press used to fire previous twice unconditionally, so the
+    # current track audibly restarted before stepping back. Near the
+    # track start (position clock, else fresh feed) it now fires once.
+    raw = open(NATIVE).read()
+    for token in ("t_near_start", "t_clock_ok",
+                  "Previous again when further in"):
+        assert token in raw, token
+
+
 def test_stamp_guard_is_boolean():
     # Live bug: the turn-stamp guards read `{{ turn_stamp }}`, which renders
     # the helper's entity-id STRING. HA template conditions only pass on the
