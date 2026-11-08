@@ -366,7 +366,20 @@ def test_position_clock_math():
                                       tz=timezone.utc).isoformat()
 
     env = jinja2.Environment()
-    env.filters["from_json"] = json.loads
+
+    # Mirror HA 2026.10.4: from_json(value) raises on bad input, but
+    # from_json(value, default) returns the default instead.
+    _missing = object()
+
+    def _from_json(v, default=_missing):
+        try:
+            return json.loads(v)
+        except ValueError:
+            if default is _missing:
+                raise
+            return default
+
+    env.filters["from_json"] = _from_json
     env.filters["to_json"] = lambda v: json.dumps(v)
 
     def run(feed_pos, feed_age_s, clock_val, title, playing, dur,

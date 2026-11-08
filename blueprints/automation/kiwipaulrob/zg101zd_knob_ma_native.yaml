@@ -412,13 +412,16 @@ variables:
   clock_raw: "{{ states(clock) if clock else '' }}"
   # Template variables always render to strings, so the parsed anchor
   # cannot survive as a mapping — validate once here, then re-parse
-  # from clock_raw at each use site (guarded by clk_valid, so a
-  # non-JSON helper never reaches from_json).
+  # from clock_raw at each use site. The clk_valid guard skips parsing
+  # for empty helpers, and every from_json carries a {} default so a
+  # helper value the engine chokes on degrades to feed-only behaviour
+  # instead of killing the run (2026-11-08: valid JSON in the helper
+  # was raising "no default was specified" and freezing all gestures).
   clk_valid: "{{ 1 if (clock and (clock_raw | trim)[:1] == '{') else 0 }}"
-  clk_t: "{{ (clock_raw | from_json).get('t', '') if clk_valid | int == 1 else '' }}"
-  clk_p: "{{ (clock_raw | from_json).get('p', 0) | float(0) if clk_valid | int == 1 else 0 }}"
-  clk_w: "{{ (clock_raw | from_json).get('w', 0) | float(0) if clk_valid | int == 1 else 0 }}"
-  clk_s: "{{ (clock_raw | from_json).get('s', 0) | int(0) if clk_valid | int == 1 else 0 }}"
+  clk_t: "{{ (clock_raw | from_json({})).get('t', '') if clk_valid | int == 1 else '' }}"
+  clk_p: "{{ (clock_raw | from_json({})).get('p', 0) | float(0) if clk_valid | int == 1 else 0 }}"
+  clk_w: "{{ (clock_raw | from_json({})).get('w', 0) | float(0) if clk_valid | int == 1 else 0 }}"
+  clk_s: "{{ (clock_raw | from_json({})).get('s', 0) | int(0) if clk_valid | int == 1 else 0 }}"
 
 conditions:
   - alias: "Knob input in a known vocabulary, and at least one candidate speaker"
