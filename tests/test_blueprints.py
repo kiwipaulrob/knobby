@@ -62,7 +62,7 @@ def test_native_blueprint_inputs():
                 "speaker_pick", "speaker_group", "exclude_players",
                 "memory_helper", "remember_speaker", "seek_latch",
                 "last_turn_helper", "position_clock", "announce_message",
-                "announce_voice", "announce_speaker", "announce_speed", "tuning"):
+                "announce_voice", "announce_speaker", "tuning"):
         assert key in top, key
     assert top["knob_action_topic"]["default"] == "zigbee2mqtt/knob/action"
     assert top["speaker_source"]["default"] == "knob_room"
@@ -78,7 +78,8 @@ def test_native_blueprint_inputs():
     assert top["announce_speaker"]["selector"] == {"entity": {"domain": "media_player"}}
     assert top["remember_speaker"]["default"] is False
     assert "boolean" in top["remember_speaker"]["selector"]
-    assert top["announce_speed"]["default"] == 1
+    # Announce speed lives in Tuning now (pinned with the tuning
+    # inputs below).
     # Every optional input must carry a default (possibly null): HA refuses
     # to generate an automation from the blueprint when a default-less
     # input is not provided ("Missing input ..."). Only the mandatory
@@ -89,21 +90,23 @@ def test_native_blueprint_inputs():
         if key in ("mode_select", "seek_latch", "position_clock"):
             continue
         assert "default" in inp, key
-    assert top["announce_speed"]["selector"] == {"number": {"min": 0.5,
-                                                           "max": 1.5,
-                                                           "step": 0.1}}
     tuning = top["tuning"]
     assert tuning.get("collapsed") is True
-    for key in ("volume_db_per_detent", "seek_seconds", "seek_window"):
+    for key in ("volume_db_per_detent", "seek_seconds", "seek_window",
+                "announce_speed"):
         assert key in tuning["input"], key
     # The helper inputs live in the main body, not under Tuning.
     assert top["last_turn_helper"]["selector"] == {"entity": {"domain": "input_datetime"}}
     assert "default" not in top["position_clock"]
     assert tuning["input"]["volume_db_per_detent"]["default"] == 1
     assert tuning["input"]["seek_seconds"]["default"] == 10
-    assert tuning["input"]["seek_window"]["default"] == "2"
+    assert tuning["input"]["seek_window"]["default"] == 2
     assert tuning["input"]["seek_window"]["selector"] == {
-        "select": {"options": ["1", "2", "3", "4", "5"]}}
+        "number": {"min": 1, "max": 5, "step": 1,
+                   "unit_of_measurement": "s"}}
+    assert tuning["input"]["announce_speed"]["default"] == 1
+    assert tuning["input"]["announce_speed"]["selector"] == {
+        "number": {"min": 0.5, "max": 1.5, "step": 0.1}}
     # Parallel: rotation runs stay instant while a hold run waits out
     # the seek window; the latch (not run ordering) decides seek vs
     # volume.
