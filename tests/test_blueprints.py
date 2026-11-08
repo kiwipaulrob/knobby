@@ -196,9 +196,27 @@ def test_triple_previous_consults_position_clock():
     # current track audibly restarted before stepping back. Near the
     # track start (position clock, else fresh feed) it now fires once.
     raw = open(NATIVE).read()
-    for token in ("t_near_start", "t_clock_ok",
-                  "Previous again when further in"):
+    for token in ("triple_single", "Previous again when further in"):
         assert token in raw, token
+
+
+def test_turn_lookback_compares_timestamp_numerically():
+    # Live bug: the hold look-back compared the rendered turn_ts STRING
+    # to int 0, which raises in Jinja — the condition could never pass,
+    # so press-and-turn fell through to the forward watch alone.
+    raw = open(NATIVE).read()
+    assert "turn_ts > 0" not in raw
+    assert "turn_ts | float(0) > 0" in raw
+
+
+def test_position_math_lives_at_top_level():
+    # Seek, triple-press, and pause used to re-derive the same
+    # clock/feed/raw priority locally; the shared base_pos is now the
+    # single definition, so the per-gesture copies must be gone.
+    raw = open(NATIVE).read()
+    for gone in ("t_base", "t_clock_ok", "t_pos", "p_est"):
+        assert gone not in raw, gone
+    assert "triple_single" in raw
 
 
 def test_stamp_guard_is_boolean():
@@ -320,6 +338,7 @@ def test_variables_defined_before_use():
     bp = load(NATIVE)
     keys = list(bp["variables"].keys())
     assert keys.index("ann_speaker") > keys.index("target"), keys
+    assert keys.index("base_pos") > keys.index("clk_s"), keys
 
 
 def _find_seek_vars(node):
@@ -335,6 +354,24 @@ def _find_seek_vars(node):
     elif isinstance(node, list):
         for v in node:
             hit = _find_seek_vars(v)
+            if hit is not None:
+                return hit
+    return None
+
+
+def _find_vars_with(node, key):
+    # Find a "- variables:" mapping that defines <key>.
+    if isinstance(node, dict):
+        if isinstance(node.get("variables"), dict) and key in node[
+                "variables"]:
+            return node["variables"]
+        for v in node.values():
+            hit = _find_vars_with(v, key)
+            if hit is not None:
+                return hit
+    elif isinstance(node, list):
+        for v in node:
+            hit = _find_vars_with(v, key)
             if hit is not None:
                 return hit
     return None
@@ -371,6 +408,8 @@ def test_position_clock_math():
     anchor_step = _find_step(bp, "Anchor the position clock on this seek")
     assert anchor_step is not None, "anchor step not found"
     anchor_tpl = anchor_step["choose"][0]["sequence"][0]["data"]["value"]
+    triple_vars = _find_vars_with(bp, "triple_single")
+    assert triple_vars is not None, "triple variables block not found"
 
     NOW = 1794000000.0
 
@@ -435,12 +474,15 @@ def test_position_clock_math():
                "clock": "input_text.clock" if clock_val is not None else "",
                "fwd": fwd, "seek_step": step}
         for name in ("cur_title", "clock_raw", "clk_valid", "clk_t",
-                     "clk_p", "clk_w", "clk_s"):
+                     "clk_p", "clk_w", "clk_s", "pos", "upd", "dur",
+                     "now_ts", "feed_ts", "feed_ok", "clock_ok",
+                     "base_pos"):
             ctx[name] = env.from_string(
                 bp["variables"][name]).render(**glb, **ctx)
-        for name in ("pos", "upd", "dur", "now_ts", "feed_ts", "feed_ok",
-                     "clock_ok", "base_pos", "stepped", "seek_to"):
+        for name in ("stepped", "seek_to"):
             ctx[name] = env.from_string(seek_tpls[name]).render(**glb, **ctx)
+        ctx["triple_single"] = env.from_string(
+            triple_vars["triple_single"]).render(**glb, **ctx)
         return ctx, glb
 
     def clock_json(p, age_s, title="Song", s=1):
@@ -507,4 +549,32 @@ def test_position_clock_math():
     ctx, _ = run(feed_pos=7, feed_age_s=None, clock_val=None,
                  title="Song", playing=True, dur=300)
     assert float(ctx["base_pos"]) == 7, ctx["base_pos"]
+
+    # 10. Triple near the start fires once; far in fires twice.
+    ctx, _ = run(feed_pos=1, feed_age_s=300,
+                 clock_val=clock_json(1, 2),
+                 title="Song", playing=True, dur=300)
+    assert abs(float(ctx["base_pos"]) - 3) < 2, ctx["base_pos"]
+    assert ctx["triple_single"] == "1", ctx["triple_single"]
+    ctx, _ = run(feed_pos=100, feed_age_s=300,
+                 clock_val=clock_json(100, 120),
+                 title="Song", playing=True, dur=300)
+    assert ctx["triple_single"] == "0", ctx["triple_single"]
+
+    # 11. Stale sample past a shorter track's duration (auto-advance
+    # with a frozen feed) fires once; genuinely near the end with a
+    # live clock still fires twice.
+    ctx, _ = run(feed_pos=290, feed_age_s=300, clock_val=None,
+                 title="Song", playing=True, dur=180)
+    assert ctx["triple_single"] == "1", ctx["triple_single"]
+    ctx, _ = run(feed_pos=0, feed_age_s=300,
+                 clock_val=clock_json(290, 5),
+                 title="Song", playing=True, dur=300)
+    assert ctx["triple_single"] == "0", ctx["triple_single"]
+
+    # 12. Paused mid-track takes the safe double-fire.
+    ctx, _ = run(feed_pos=0, feed_age_s=300,
+                 clock_val=clock_json(100, 120),
+                 title="Song", playing=False, dur=300)
+    assert ctx["triple_single"] == "0", ctx["triple_single"]
 

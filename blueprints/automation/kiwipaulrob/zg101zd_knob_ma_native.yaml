@@ -47,7 +47,7 @@ blueprint:
     press nudges volume for the first detent(s) before the hold
     registers; within the window after a favourite-hold, turns seek
     instead of voluming. A fast triple parses as `double` (next track)
-    and may ALSO flip the mode (previous) — verify on install.
+    and may ALSO flip the mode (previous).
 
     Press-turn seeks from the knob's own position clock: the player's
     feed only refreshes position in the first seconds of each track,
@@ -57,10 +57,14 @@ blueprint:
 
     Tested on HA 2026.10.4. Minimum version 2024.6.0 (input sections).
 
-    Version 1.1 (Nov 2026, live-verified on hardware). Changelog: 1.1 —
-    helper inputs moved out of Tuning, position clock is now standard,
-    descriptions tidied. 1.0 — own position clock beats the dead feed;
-    turn-stamp guards fixed (date AND time); announce speed gated to
+    Version 1.2 (Nov 2026). Changelog: 1.2 — triple-press consults
+    the position clock (single previous near the track start, stale
+    past-duration samples treated as a fresh start); position math
+    shared across seek/triple/pause; turn-stamp look-back fixed
+    (string-vs-int comparison never fired). 1.1 — helper inputs moved
+    out of Tuning, position clock is now standard, descriptions
+    tidied. 1.0 — own position clock beats the dead feed; turn-stamp
+    guards fixed (date AND time); announce speed gated to
     Piper/Wyoming.
   domain: automation
   source_url: https://github.com/kiwipaulrob/ma-fav-button/blob/main/blueprints/automation/kiwipaulrob/zg101zd_knob_ma_native.yaml
@@ -379,10 +383,12 @@ variables:
   # Own position clock (required input_text helper): the player feed
   # only refreshes position in the first seconds of each track, so the
   # knob keeps its own anchor and extrapolates while playing. Parsed
-  # here (top-level variables are visible in every gesture sequence);
-  # the seek step decides clock vs feed vs raw. Defined after target:
-  # variables evaluate top-down. An empty/missing/garbage helper
-  # parses to {} and every clock check below simply stays off.
+  # here (top-level variables are visible in every gesture sequence)
+  # and resolved into base_pos below, which seek, triple-press, and
+  # pause share (play re-anchors its own way — see below). Defined
+  # after target: variables evaluate top-down. An empty/missing/
+  # garbage helper parses to {} and every clock check below simply
+  # stays off.
   clock: !input position_clock
   cur_title: "{{ state_attr(target, 'media_title') or '' }}"
   clock_raw: "{{ states(clock) if clock else '' }}"
@@ -397,6 +403,20 @@ variables:
   clk_p: "{{ (clock_raw | from_json({})).get('p', 0) | float(0) if clk_valid | int == 1 else 0 }}"
   clk_w: "{{ (clock_raw | from_json({})).get('w', 0) | float(0) if clk_valid | int == 1 else 0 }}"
   clk_s: "{{ (clock_raw | from_json({})).get('s', 0) | int(0) if clk_valid | int == 1 else 0 }}"
+  # Shared position math, resolved once per run and read by seek,
+  # triple-press, and pause alike so the three gestures can't drift
+  # apart. Priority: own clock (exact while it is ours), fresh feed
+  # (< 60 s, projected while playing), raw sample last.
+  pos: "{{ state_attr(target, 'media_position') | float(0) }}"
+  upd: "{{ state_attr(target, 'media_position_updated_at') }}"
+  dur: "{{ state_attr(target, 'media_duration') | float(0) }}"
+  now_ts: "{{ as_timestamp(now()) }}"
+  feed_ts: "{{ as_timestamp(upd) if (upd is string and '-' in upd) else 0 }}"
+  # Rendered 1/0, never True/False: a bare boolean renders "False",
+  # which is a non-empty (thus truthy) string in an {% if %}.
+  feed_ok: "{{ 1 if (is_state(target, 'playing') and feed_ts | float > 0 and (now_ts | float - feed_ts | float) < 60) else 0 }}"
+  clock_ok: "{{ 1 if (clk_t == cur_title and cur_title != '' and clk_s | int == 1 and is_state(target, 'playing') and clk_w | float > 0) else 0 }}"
+  base_pos: "{% if clock_ok | int == 1 %}{{ [clk_p | float + (now_ts | float - clk_w | float), 0.0] | max }}{% elif feed_ok | int == 1 %}{{ pos | float + (now_ts | float - feed_ts | float) }}{% else %}{{ pos }}{% endif %}"
 
 conditions:
   - alias: "Knob input in a known vocabulary, and at least one candidate speaker"
@@ -421,28 +441,21 @@ actions:
         conditions: "{{ trigger.id in ['triple', 'triple_rev'] }}"
         sequence:
           # MA treats a lone previous as restart-current once past its
-          # restart threshold, so consult the position clock (clock,
-          # else fresh feed, else raw sample — same order as seek):
-          # near the start a single previous steps straight back with
-          # no restart-blip; further in, fire twice (first restarts,
-          # second steps back). Non-playing or unknown position takes
+          # restart threshold: a single previous steps straight back when
+          # base_pos is within the first seconds, or past the duration
+          # with a dead clock (a stale sample after auto-advance — the
+          # real position is near the new track's start). Otherwise fire
+          # twice (first restarts, second steps back). Non-playing takes
           # the safe double-fire.
           - variables:
-              t_pos: "{{ state_attr(target, 'media_position') | float(0) }}"
-              t_upd: "{{ state_attr(target, 'media_position_updated_at') }}"
-              t_now: "{{ as_timestamp(now()) }}"
-              t_feed_ts: "{{ as_timestamp(t_upd) if (t_upd is string and '-' in t_upd) else 0 }}"
-              t_feed_ok: "{{ 1 if (is_state(target, 'playing') and t_feed_ts | float > 0 and (t_now | float - t_feed_ts | float) < 60) else 0 }}"
-              t_clock_ok: "{{ 1 if (clk_t == cur_title and cur_title != '' and clk_s | int == 1 and is_state(target, 'playing') and clk_w | float > 0) else 0 }}"
-              t_base: "{% if t_clock_ok | int == 1 %}{{ [clk_p | float + (t_now | float - clk_w | float), 0.0] | max }}{% elif t_feed_ok | int == 1 %}{{ t_pos | float + (t_now | float - t_feed_ts | float) }}{% else %}{{ t_pos }}{% endif %}"
-              t_near_start: "{{ 1 if (is_state(target, 'playing') and t_base | float(0) <= 5) else 0 }}"
+              triple_single: "{{ 1 if (is_state(target, 'playing') and ((base_pos | float) <= 5 or ((dur | float) > 0 and (clock_ok | int) == 0 and (base_pos | float) > (dur | float)))) else 0 }}"
           - alias: "Previous (steps straight back near the track start)"
             action: media_player.media_previous_track
             target:
               entity_id: "{{ target }}"
           - alias: "Previous again when further in (first only restarted)"
             choose:
-              - conditions: "{{ t_near_start | int == 0 }}"
+              - conditions: "{{ triple_single | int == 0 }}"
                 sequence:
                   - delay: "00:00:02"
                   - action: media_player.media_previous_track
@@ -490,27 +503,8 @@ actions:
                             data:
                               timestamp: "{{ now().timestamp() }}"
                   - variables:
-                      pos: "{{ state_attr(target, 'media_position') | float(0) }}"
-                      upd: "{{ state_attr(target, 'media_position_updated_at') }}"
-                      dur: "{{ state_attr(target, 'media_duration') | float(0) }}"
-                      now_ts: "{{ as_timestamp(now()) }}"
-                      feed_ts: "{{ as_timestamp(upd) if (upd is string and '-' in upd) else 0 }}"
-                      # Fresh feed (< 60 s): project forward while playing.
-                      # Rendered 1/0, never True/False: a bare boolean
-                      # renders "False", which is a non-empty (thus truthy)
-                      # string in the {% if %} below.
-                      feed_ok: "{{ 1 if (is_state(target, 'playing') and feed_ts | float > 0 and (now_ts | float - feed_ts | float) < 60) else 0 }}"
-                      # Own clock: usable only while it names the track still
-                      # playing, was left playing, and carries a real anchor.
-                      # A paused clock stays frozen, a track change
-                      # invalidates it (the press / double / triple /
-                      # announce steps maintain it — see below).
-                      clock_ok: "{{ 1 if (clk_t == cur_title and cur_title != '' and clk_s | int == 1 and is_state(target, 'playing') and clk_w | float > 0) else 0 }}"
-                      # Clock first (exact while it is ours), fresh feed
-                      # second, raw sample last. seek_to clamps to [0, dur]
-                      # below, so runaway extrapolation can never catapult
-                      # past the track end the way a stale feed sample did.
-                      base_pos: "{% if clock_ok | int == 1 %}{{ [clk_p | float + (now_ts | float - clk_w | float), 0.0] | max }}{% elif feed_ok | int == 1 %}{{ pos | float + (now_ts | float - feed_ts | float) }}{% else %}{{ pos }}{% endif %}"
+                      # pos/upd/dur/now_ts/feed_ts/feed_ok/clock_ok/base_pos
+                      # are top-level (shared with triple-press and pause).
                       stepped: "{{ (base_pos | float) + (seek_step | float if fwd else -(seek_step | float)) }}"
                       seek_to: "{{ ([([stepped | float, 0.0] | max), dur | float] | min) if (dur | float > 0) else (stepped | float) }}"
                   # No duration (idle/stale player) means nowhere to seek: stop.
@@ -588,15 +582,11 @@ actions:
                             choose:
                               - conditions: "{{ clock is defined and clock and clock != '' }}"
                                 sequence:
-                                  - variables:
-                                      p_pos: "{{ state_attr(target, 'media_position') | float(0) }}"
-                                      p_upd: "{{ state_attr(target, 'media_position_updated_at') }}"
-                                      p_est: "{% if clk_t == cur_title and cur_title != '' and clk_s | int == 1 and clk_w | float > 0 %}{{ [clk_p | float + (as_timestamp(now()) - clk_w | float), 0.0] | max }}{% elif p_upd is string and '-' in p_upd and (as_timestamp(now()) - as_timestamp(p_upd)) < 60 %}{{ p_pos | float + (as_timestamp(now()) - as_timestamp(p_upd)) }}{% else %}{{ p_pos }}{% endif %}"
                                   - action: input_text.set_value
                                     target:
                                       entity_id: "{{ clock }}"
                                     data:
-                                      value: "{{ {'t': cur_title, 'p': p_est | float, 'w': as_timestamp(now()), 's': 0} | to_json }}"
+                                      value: "{{ {'t': cur_title, 'p': base_pos | float, 'w': now_ts | float, 's': 0} | to_json }}"
                           - action: media_player.media_pause
                             target:
                               entity_id: "{{ target }}"
@@ -664,7 +654,7 @@ actions:
                   # no wait, no favourite.
                   - alias: Skip when turns just preceded (seek, not favourite)
                     choose:
-                      - conditions: "{{ turn_ts > 0 and (as_timestamp(now()) - turn_ts) < (win_secs | float) }}"
+                      - conditions: "{{ turn_ts | float(0) > 0 and (as_timestamp(now()) - turn_ts | float(0)) < (win_secs | float) }}"
                         sequence:
                           - alias: Disarm the seek latch
                             action: input_boolean.turn_off
