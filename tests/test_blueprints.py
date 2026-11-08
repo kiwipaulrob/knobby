@@ -228,9 +228,27 @@ def test_stamp_guard_is_boolean():
     # string "true", so the guard was always false and no turn ever stamped
     # (helper frozen since provisioning). Guards must be boolean expressions;
     # the Jinja truthiness inside turn_ts was always fine and stays as is.
+    # Since v1.5 only the seek branch stamps (volume turns must not trip
+    # the hold's backward check), exactly one guarded stamp site remains.
     raw = open(NATIVE).read()
     assert 'conditions: "{{ turn_stamp }}"' not in raw
-    assert raw.count("(turn_stamp | default('')) != ''") == 2
+    assert raw.count("(turn_stamp | default('')) != ''") == 1
+
+
+def test_only_seeks_stamp_the_turn_helper():
+    # Live bug (event mode): plain-volume turns stamped the same helper
+    # the hold's backward check reads, so every press-and-turn looked
+    # finished — the hold disarmed in milliseconds and nothing sought —
+    # and volume-then-hold never favourited either. Only the seek branch
+    # may write the stamp now.
+    raw = open(NATIVE).read()
+    assert raw.count("action: input_datetime.set_datetime") == 1
+    seek_idx = raw.index('"Turn while held: seek"')
+    vol_idx = raw.index('"Plain turn: volume"')
+    press_idx = raw.index('"Press: play/pause"')
+    stamp_idx = raw.index("action: input_datetime.set_datetime")
+    assert seek_idx < stamp_idx < vol_idx
+    assert "set_datetime" not in raw[vol_idx:press_idx]
 
 
 def test_keeper_folded_into_native():

@@ -64,10 +64,13 @@ These were found the hard way, in live traces. Design around them.
    sends its steps during the first ~3 s; `hue_move` (the hold) fires
    at the end. Any "wait to see if a turn follows the hold" logic
    watches a window in which nothing can arrive, so every long seek
-   ends in a favourite. The fix: every rotation stamps
+   ends in a favourite. The fix: every SEEK stamps
    `input_datetime.knob_2_last_turn`, and the hold step checks
-   *backwards* as well as forwards — a turn within the seek window
-   just *before* the hold cancels the favourite.
+   *backwards* as well as forwards — a seek within the seek window
+   just *before* the hold cancels the favourite. Plain volume turns
+   deliberately don't stamp: in event mode the pre-hold turns of a
+   press-and-turn do volume, and stamping them made every such hold
+   disarm in milliseconds with nothing sought (fixed v1.5).
 2. **The 3-second threshold shapes every gesture.** Press + rotate +
    release inside ~3 s produces steps with no hold event at all.
    Cross the threshold and a hold event lands on top of finished
@@ -145,8 +148,8 @@ These were found the hard way, in live traces. Design around them.
   (`input_boolean.knob_2_seek_latch`) is freshly armed by a hold —
   otherwise they are volume.
 - Hold-to-favourite is **committed ~2 s after the hold** (tunable
-  `seek_window`): a turn arriving after the hold, *or stamped just
-  before it* (§3.1), converts the gesture into a seek and the
+  `seek_window`): a turn arriving after the hold, *or a seek stamped
+  just before it* (§3.1), converts the gesture into a seek and the
   favourite never fires. Favouriting is MA add-only, so a stray
   favourite is harmless — but the announcement would talk over the
   music, which is why suppression matters more than the favourite
@@ -191,7 +194,7 @@ One automation from
 | `speaker_source` | `knob_room` (default) / `pick_players` / `pick_group` |
 | `exclude_players` | Entity ids never targeted (TVs) |
 | `seek_latch` | `input_boolean` arming held-turn seek |
-| `last_turn_helper` | `input_datetime` stamped per rotation (hold look-back) |
+| `last_turn_helper` | `input_datetime` stamped per seek (hold look-back) |
 | `memory_helper` / `remember_speaker` | Last-used-speaker recall |
 | `position_clock` | Required `input_text` holding the knob's own `{title, position, wall-clock, state}` JSON (seek anchor — §5) |
 | `announce_message/voice/speaker/speed` | Confirmation text, `tts.*` engine, target, pace |

@@ -57,7 +57,10 @@ blueprint:
 
     Tested on HA 2026.10.4. Minimum version 2024.6.0 (input sections).
 
-    Version 1.4 (Nov 2026). Changelog: 1.4 — hold-to-seek window is
+    Version 1.5 (Nov 2026). Changelog: 1.5 — the turn stamp records
+    seeks only, so event-mode press-and-turn (whose pre-hold turns do
+    volume) seeks instead of dying in milliseconds, and volume-then-hold
+    favourites again; command-mode behaviour unchanged. 1.4 — hold-to-seek window is
     now a 1–5 s number slider like Seek step (default 2 s), and
     Announce speed moved into Tuning; stored window values from older
     imports (duration or dropdown text) are ignored, so re-pick the
@@ -192,11 +195,13 @@ blueprint:
     last_turn_helper:
       name: Recent-turn stamp helper
       description: >
-        An input_datetime the knob stamps on every rotation. A hold
-        arriving just after turns was a long seek, not a new favourite
-        — without this, press-and-rotate crossing the knob's ~3 s hold
-        threshold favourites. Create an input_datetime and pick it
-        here; empty keeps the old forward-watch-only behaviour. It MUST
+        An input_datetime the knob stamps on every seek. A hold
+        arriving just after seeks was a long press-and-turn, not a new
+        favourite — without this, press-and-rotate crossing the knob's
+        ~3 s hold threshold favourites. Plain volume turns don't stamp,
+        so volume-then-hold still favourites. Create an input_datetime
+        and pick it here; empty keeps the old forward-watch-only
+        behaviour. It MUST
         store date AND time — tick both on (date-only reads as midnight
         and silently disables this).
       default:
@@ -499,9 +504,10 @@ actions:
               - alias: "Turn while held: seek"
                 conditions: "{{ seeking }}"
                 sequence:
-                  # Stamp every turn: a hold arriving just after turns
-                  # was a seek that ran long — the hold step checks this
-                  # stamp and skips the favourite.
+                  # Stamp every SEEK: a hold arriving just after seeks
+                  # was a press-and-turn that ran long — the hold step
+                  # checks this stamp and skips the favourite. Plain
+                  # volume turns deliberately don't stamp (see below).
                   - alias: Stamp this turn for the hold step
                     choose:
                       - conditions: "{{ (turn_stamp | default('')) != '' }}"
@@ -541,18 +547,13 @@ actions:
               - alias: "Plain turn: volume"
                 conditions: "{{ gesture == 'volume_right' or gesture == 'volume_left' }}"
                 sequence:
-                  # Stamp every turn, seek or volume alike: a hold
-                  # arriving just after any turn was part of that
-                  # gesture, not a new favourite.
-                  - alias: Stamp this turn for the hold step
-                    choose:
-                      - conditions: "{{ (turn_stamp | default('')) != '' }}"
-                        sequence:
-                          - action: input_datetime.set_datetime
-                            target:
-                              entity_id: "{{ turn_stamp }}"
-                            data:
-                              timestamp: "{{ now().timestamp() }}"
+                  # Deliberately NO stamp here: the hold step's backward
+                  # check means "a seek just landed". Stamping volume
+                  # turns too made every event-mode press-and-turn look
+                  # finished — the pre-hold turns volumed, the hold
+                  # disarmed in milliseconds, and nothing sought — and
+                  # also killed volume-then-hold favourites. Volume
+                  # turns simply don't count.
                   - variables:
                       # float(0.02): unreadable/off players start from ~2% so the
                       # first upward detent from silence always kicks audibly;
@@ -654,14 +655,15 @@ actions:
                     action: input_boolean.turn_on
                     target:
                       entity_id: "{{ latch }}"
-                  # Look back as well as forward: press-and-rotate sends
-                  # its turns BEFORE the knob's ~3 s hold threshold fires,
-                  # so a forward-only watch always misses them and every
-                  # long seek ends in a favourite. If a turn landed within
-                  # the window just before this hold, the music already
-                  # seeked (or the volume already moved) — disarm and stop:
-                  # no wait, no favourite.
-                  - alias: Skip when turns just preceded (seek, not favourite)
+                  # Look back as well as forward: command-mode
+                  # press-and-rotate sends its (seeking) turns BEFORE the
+                  # knob's ~3 s hold threshold fires, so a forward-only
+                  # watch always misses them and every long seek ends in
+                  # a favourite. If a SEEK landed within the window just
+                  # before this hold, that gesture already did its job —
+                  # disarm and stop: no wait, no favourite. Plain volume
+                  # turns never stamp, so they never trip this.
+                  - alias: Skip when a seek just preceded (already sought, not favourite)
                     choose:
                       - conditions: "{{ turn_ts | float(0) > 0 and (as_timestamp(now()) - turn_ts | float(0)) < (win_secs | float) }}"
                         sequence:
