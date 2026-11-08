@@ -164,6 +164,14 @@ engines ignore it. Clear the message, or leave the voice empty, for silence.
   cleared. Both are valid "off switches".
 - **Needs HA 2024.6.0+** (input sections on the form).
 
+## Reporting a problem
+
+If a gesture misbehaves, three things let me diagnose it fast:
+1. The failed run's trace: open the automation → Traces (top-right) → pick the run → ⋯ → Download trace, and attach the JSON. It shows the trigger, the branch taken, and the exact error — worth more than everything else combined. Grab it before turning the knob again (HA keeps only recent runs).
+2. The error text from Settings → System → Logs.
+3. Your versions (HA, Zigbee2MQTT, Music Assistant, blueprint version line) and what you did vs what you expected.
+If the automation never triggered (no trace exists), give the knob's action sensor value (Developer tools → States → sensor.<knob>_last_action) plus a screenshot of the automation's inputs instead.
+
 ## Files
 
 - `blueprints/automation/kiwipaulrob/zg101zd_knob_ma_native.yaml` — the blueprint
