@@ -314,7 +314,7 @@ variables:
     hue_move: hold
     color_temperature_step_up: seek_right
     color_temperature_step_down: seek_left
-    # Event-mode vocabulary (the triple toggle drifts the knob here).
+    # Event-mode vocabulary (the triple toggle can land the knob here).
     rotate_right: volume_right
     rotate_left: volume_left
     single: press
@@ -376,7 +376,7 @@ variables:
   ann_text: >-
     {{ announce_msg | replace('{song}', state_attr(target, 'media_title') or 'the track')
        | replace('{artist}', state_attr(target, 'media_artist') or 'unknown artist') }}
-  # Own position clock (optional input_text helper): the player feed
+  # Own position clock (required input_text helper): the player feed
   # only refreshes position in the first seconds of each track, so the
   # knob keeps its own anchor and extrapolates while playing. Parsed
   # here (top-level variables are visible in every gesture sequence);
@@ -391,8 +391,7 @@ variables:
   # from clock_raw at each use site. The clk_valid guard skips parsing
   # for empty helpers, and every from_json carries a {} default so a
   # helper value the engine chokes on degrades to feed-only behaviour
-  # instead of killing the run (2026-11-08: valid JSON in the helper
-  # was raising "no default was specified" and freezing all gestures).
+  # instead of killing the run.
   clk_valid: "{{ 1 if (clock and (clock_raw | trim)[:1] == '{') else 0 }}"
   clk_t: "{{ (clock_raw | from_json({})).get('t', '') if clk_valid | int == 1 else '' }}"
   clk_p: "{{ (clock_raw | from_json({})).get('p', 0) | float(0) if clk_valid | int == 1 else 0 }}"
@@ -426,8 +425,7 @@ actions:
           # else fresh feed, else raw sample — same order as seek):
           # near the start a single previous steps straight back with
           # no restart-blip; further in, fire twice (first restarts,
-          # second steps back). Mirrors the relay's dim_prev behaviour
-          # for the far-in case. Non-playing or unknown position takes
+          # second steps back). Non-playing or unknown position takes
           # the safe double-fire.
           - variables:
               t_pos: "{{ state_attr(target, 'media_position') | float(0) }}"
@@ -497,10 +495,10 @@ actions:
                       dur: "{{ state_attr(target, 'media_duration') | float(0) }}"
                       now_ts: "{{ as_timestamp(now()) }}"
                       feed_ts: "{{ as_timestamp(upd) if (upd is string and '-' in upd) else 0 }}"
-                      # Fresh feed (< 60 s): project forward while playing,
-                      # as before. Rendered 1/0, never True/False: a bare
-                      # boolean renders "False", which is a non-empty (thus
-                      # truthy) string in the {% if %} below.
+                      # Fresh feed (< 60 s): project forward while playing.
+                      # Rendered 1/0, never True/False: a bare boolean
+                      # renders "False", which is a non-empty (thus truthy)
+                      # string in the {% if %} below.
                       feed_ok: "{{ 1 if (is_state(target, 'playing') and feed_ts | float > 0 and (now_ts | float - feed_ts | float) < 60) else 0 }}"
                       # Own clock: usable only while it names the track still
                       # playing, was left playing, and carries a real anchor.
@@ -646,10 +644,10 @@ actions:
                   # Echo guard: a hold arriving while a previous hold's
                   # window is still open is the firmware's double echo
                   # (or a re-press mid-gesture), not a new press — the
-                  # first waiter already owns this gesture. This also
-                  # replaces the old `this.last_triggered` debounce,
-                  # which misfired whenever ANY trigger (e.g. a rotation)
-                  # had fired recently, swallowing real favourites.
+                  # first waiter already owns this gesture. A shared
+                  # last-triggered timestamp misfired whenever ANY trigger
+                  # (e.g. a rotation) had fired recently, swallowing real
+                  # favourites — hence this latch-based guard.
                   - alias: Skip firmware double-echoes and mid-gesture re-presses
                     condition: template
                     value_template: "{{ not is_state(latch, 'on') or (now() - states[latch].last_changed).total_seconds() > (win_secs | float) }}"
