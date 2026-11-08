@@ -321,7 +321,7 @@ triggers:
     id: triple_rev
   - trigger: template
     value_template: >
-      {{ expand(integration_entities('music_assistant') | select('search', 'media_player') | reject('in', !input exclude_players) | list) | selectattr('state', 'eq', 'playing') | map(attribute='entity_id') | sort | join(',') }}
+      {{ expand(integration_entities('music_assistant') | select('search', 'media_player') | list) | selectattr('state', 'eq', 'playing') | map(attribute='entity_id') | sort | join(',') }}
     id: keeper
 
 variables:
