@@ -57,7 +57,10 @@ blueprint:
 
     Tested on HA 2026.10.4. Minimum version 2024.6.0 (input sections).
 
-    Version 1.2 (Nov 2026). Changelog: 1.2 — triple-press consults
+    Version 1.3 (Nov 2026). Changelog: 1.3 — hold-to-seek window is
+    now a 1–5 s dropdown (default 2 s); a stored duration value from
+    an older import is ignored, so re-pick the window after
+    re-importing. 1.2 — triple-press consults
     the position clock (single previous near the track start, stale
     past-duration samples treated as a fresh start); position math
     shared across seek/triple/pause; turn-stamp look-back fixed
@@ -281,16 +284,19 @@ blueprint:
         seek_window:
           name: Hold-to-seek window
           description: >
-            How long after a hold turns seek (and the favourite waits to
-            make sure you are not turning). Longer forgives
-            pause-then-turn; the favourite lands this much later.
-          default:
-            hours: 0
-            minutes: 0
-            seconds: 2
+            How many seconds after a hold turns still seek (and the
+            favourite waits to make sure you are not turning). Longer
+            forgives pause-then-turn; the favourite lands this much
+            later.
+          default: "2"
           selector:
-            duration:
-              enable_day: false
+            select:
+              options:
+                - "1"
+                - "2"
+                - "3"
+                - "4"
+                - "5"
 
 triggers:
   - trigger: mqtt
@@ -351,8 +357,8 @@ variables:
   announce_speed: !input announce_speed
   db_step: !input volume_db_per_detent
   seek_step: !input seek_seconds
-  window: !input seek_window
-  win_secs: "{{ (window.hours | int(0)) * 3600 + (window.minutes | int(0)) * 60 + (window.seconds | int(0)) }}"
+  seek_secs: !input seek_window
+  win_secs: "{{ seek_secs | int(2) }}"
   # Music Assistant's own players only — the room also holds non-MA
   # media players that must never be candidates.
   ma_players: "{{ integration_entities('music_assistant') | select('match', 'media_player\\.') | list }}"
@@ -702,7 +708,7 @@ actions:
                       - trigger: mqtt
                         topic: !input knob_action_topic
                         payload: color_temperature_step_down
-                    timeout: !input seek_window
+                    timeout: "{{ '00:00:0' ~ (seek_secs | int(2)) }}"
                     continue_on_timeout: true
                   - alias: Disarm the seek latch
                     action: input_boolean.turn_off

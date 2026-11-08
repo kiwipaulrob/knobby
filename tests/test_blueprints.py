@@ -101,9 +101,9 @@ def test_native_blueprint_inputs():
     assert "default" not in top["position_clock"]
     assert tuning["input"]["volume_db_per_detent"]["default"] == 1
     assert tuning["input"]["seek_seconds"]["default"] == 10
-    assert tuning["input"]["seek_window"]["default"] == {"hours": 0,
-                                                        "minutes": 0,
-                                                        "seconds": 2}
+    assert tuning["input"]["seek_window"]["default"] == "2"
+    assert tuning["input"]["seek_window"]["selector"] == {
+        "select": {"options": ["1", "2", "3", "4", "5"]}}
     # Parallel: rotation runs stay instant while a hold run waits out
     # the seek window; the latch (not run ordering) decides seek vs
     # volume.
