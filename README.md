@@ -166,7 +166,7 @@ engines ignore it. Clear the message, or leave the voice empty, for silence.
 
 ## Reporting a problem
 
-If a gesture misbehaves, three things let me diagnose it fast:
+If a gesture misbehaves, reply on the community forum thread with three things and I'll diagnose it fast:
 1. The failed run's trace: open the automation → Traces (top-right) → pick the run → ⋯ → Download trace, and attach the JSON. It shows the trigger, the branch taken, and the exact error — worth more than everything else combined. Grab it before turning the knob again (HA keeps only recent runs).
 2. The error text from Settings → System → Logs.
 3. Your versions (HA, Zigbee2MQTT, Music Assistant, blueprint version line) and what you did vs what you expected.
