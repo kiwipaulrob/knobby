@@ -1,0 +1,52 @@
+blueprint:
+  name: Knobby memory — remember the active MA player
+  description: >
+    Companion to the Knobby knob blueprint. Remembers which speaker is
+    playing in a text helper so the knob resolves the right target,
+    including across HA restarts. Import, pick the speakers to watch,
+    pick a text helper, done — no YAML, no exact entity names.
+
+    Setup: create one input_text helper first (any name) under
+    Settings → Devices & services → Helpers, then select it below.
+  domain: automation
+  source_url: https://github.com/kiwipaulrob/ma-fav-button/blob/main/blueprints/automation/kiwipaulrob/ma_active_player_memory.yaml
+  author: kiwipaulrob
+  homeassistant:
+    min_version: 2024.6.0
+  input:
+    speakers:
+      name: Speakers to watch
+      description: The Music Assistant players the knob may follow. Leave out TVs and dashboard displays.
+      selector:
+        entity:
+          multiple: true
+          filter:
+            - integration: music_assistant
+              domain: media_player
+    memory:
+      name: Memory text helper
+      description: Stores the currently-playing speaker. Survives restarts.
+      selector:
+        entity:
+          filter:
+            - domain: input_text
+variables:
+  speakers: !input speakers
+trigger:
+  - platform: template
+    value_template: >
+      {{ expand(speakers) | selectattr('state', 'eq', 'playing')
+         | map(attribute='entity_id') | sort | join(',') }}
+condition:
+  - condition: template
+    value_template: >
+      {{ expand(speakers) | selectattr('state', 'eq', 'playing') | list | count > 0 }}
+action:
+  - action: input_text.set_value
+    target:
+      entity_id: !input memory
+    data:
+      value: >
+        {{ (expand(speakers) | selectattr('state', 'eq', 'playing')
+            | map(attribute='entity_id') | sort)[0] }}
+mode: single
