@@ -1,6 +1,10 @@
 blueprint:
   name: Zigbee smart knob gestures (ZG-101ZD / Moes via Z2M)
   description: >
+    [SUPERSEDED for Music Assistant use — import
+    zg101zd_knob_ma_native instead. Kept for wiring gestures to
+    non-MA targets.]
+
     Turn the raw MQTT action strings of a Zigbee2MQTT smart knob
     (HOBEIAN / Moes ZG-101ZD and similar Tuya knobs, command mode)
     into per-gesture actions you pick in the UI: rotate for volume,
