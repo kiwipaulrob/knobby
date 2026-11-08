@@ -76,10 +76,13 @@ blueprint:
       name: Knob action MQTT topic
       description: >
         The knob's MQTT action topic: zigbee2mqtt/<name>/action, using
-        the name on the knob's Zigbee2MQTT device page (spaces become
-        underscores, e.g. zigbee2mqtt/knob/action). Confirm on the Z2M
-        device page — the Action field updates with each press. If you
-        changed Z2M's base topic, use that instead.
+        the name on the knob's Zigbee2MQTT device page exactly as shown
+        — Z2M keeps spaces (a device named "knob 2" publishes on
+        zigbee2mqtt/knob 2/action). Confirm on the Z2M device page —
+        the Action field updates with each press. (The underscores in
+        entity ids like sensor.knob_2_last_action are Home Assistant's
+        doing, not Z2M's.) If you changed Z2M's base topic, use that
+        instead.
       default: zigbee2mqtt/knob/action
       selector:
         text:
@@ -288,6 +291,8 @@ blueprint:
           selector:
             duration:
               enable_day: false
+              enable_hour: false
+              enable_minute: false
 
 triggers:
   - trigger: mqtt
