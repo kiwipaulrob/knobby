@@ -76,7 +76,11 @@ blueprint:
       name: Knob operation-mode select
       description: >
         The Z2M operation_mode select entity for this knob (e.g.
-        select.knob_2_operation_mode). Triple-press emits no action —
+        select.knob_2_operation_mode). Build it from the Z2M device
+        name: lowercase, spaces to underscores, as
+        select.<name>_operation_mode — a re-paired knob gains a _2/_3
+        suffix, so if unsure open the knob's Z2M device page and take
+        the entity ending in operation_mode. Triple-press emits no action —
         it only flips this select event<->command — so the blueprint
         fires on BOTH flip directions. The blueprint never writes it.
         Room mode reads the knob's room from this entity, so the knob
