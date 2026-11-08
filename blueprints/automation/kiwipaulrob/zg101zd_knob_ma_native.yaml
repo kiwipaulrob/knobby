@@ -291,8 +291,6 @@ blueprint:
           selector:
             duration:
               enable_day: false
-              enable_hour: false
-              enable_minute: false
 
 triggers:
   - trigger: mqtt
