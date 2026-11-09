@@ -3,14 +3,14 @@ blueprint:
   description: |
     Wire a Zigbee2MQTT smart knob (HOBEIAN / Moes ZG-101ZD and similar
     Tuya knobs) straight to Music Assistant with no extra software: no
-    relay, no Python, no add-on, nothing to host.
+    Python, no add-on, nothing to host.
 
     What it does:
 
     - Rotate for volume (~1 dB logarithmic taper), press for
       play/pause, double-press for next track, triple-press for
       previous track.
-    - Bare hold favourites the current song; turn-while-held seeks
+    - Hold to add the current song to favourites; turn-while-held seeks
       with duration clamping.
 
     Setup (2 minutes):
@@ -41,10 +41,10 @@ blueprint:
     volume+hold, so seek vs favourite is disambiguated by gesture
     shape: rotations while the seek latch is on seek instead of
     changing volume, and the favourite waits out the seek window to
-    make sure you are not turning. Technique: press and turn (pause a
-    beat first in event mode; in command mode no pause is needed).
-    Residuals: the favourite lands ~2 s late; spinning the instant you
-    press nudges volume for the first detent(s) before the hold
+    make sure you are not turning. Technique: press, pause for a second
+    and turn (pause is necessary because in event mode the favourite
+    option only becomes available after 2 seconds); spinning the
+    instant you press nudges volume for the first detent(s) before the hold
     registers; within the window after a favourite-hold, turns seek
     instead of voluming. A fast triple parses as `double` (next track)
     and may ALSO flip the mode (previous).
