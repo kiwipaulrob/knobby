@@ -1,4 +1,4 @@
-# Volume knob for Music Assistant
+# Knobby — volume knob for Music Assistant
 
 Turn a Zigbee knob into a volume knob for Music Assistant: **turn** for
 volume, **press** for play/pause, **double-press** for next track,
