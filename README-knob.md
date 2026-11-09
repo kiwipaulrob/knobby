@@ -260,7 +260,7 @@ The retired Python relay (`ma-fav-button-relay.py`, `examples/`,
 `tests/test_relay_*.py`) did all of this behind a `rest_command`
 with the brains in hosted code: dumb-pipe HA automations, per-gesture
 `event_type` slots, dry-run testing (`/health`, `"dry_run": true`),
-and the gesture wiring example `examples/ma-gesture-wiring.yaml`. It still
+and the gesture blueprint `blueprints/automation/kiwipaulrob/zg101zd_knob_gestures.yaml` (superseded, kept for non-MA targets). It still
 works, but the native blueprint replaces it with one import, no
 hosted code, and the same gestures plus triple-press previous and
 press-and-turn seek. The relay's proportional-voice and dry-run
