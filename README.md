@@ -9,6 +9,8 @@ One blueprint import inside Home Assistant does it all — no Python, no
 extra service, no YAML editing. Built for the HOBEIAN ZG-101ZD and any
 Zigbee2MQTT knob that sends the same actions.
 
+![The ZG-101ZD knob on a wooden surface](docs/images/knob.jpg)
+
 Device behaviour, the operation-mode action table, and every trap
 found along the way are documented in [README-knob.md](README-knob.md).
 
