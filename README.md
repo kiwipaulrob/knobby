@@ -120,8 +120,10 @@ no restart needed (Automations → Reload only if you edit later).
 pick it in the memory field, and switch on "Knob remembers last
 speaker" (off by default). From then on every turn, press and hold
 writes the speaker just used into the memory, so the knob finds it
-next time everything is idle. One speaker? Skip all of this — the
-fallback already lands correctly.
+next time everything is idle. Playback started elsewhere (phone,
+voice) is caught automatically — the automation notices and records
+that speaker by itself, even with the remember switch off. One
+speaker? Skip all of this — the fallback already lands correctly.
 
 **6. (Optional) voice confirmation.** The announce message ships
 prefilled (`Added {song} by {artist} to favourites`); the voice ships

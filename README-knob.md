@@ -117,10 +117,37 @@ These were found the hard way, in live traces. Design around them.
   from quiet to loud, with a small **silence kick** so level 1 from
   silence is never dead.
 - The knob **follows the music**: on every gesture the automation
-  resolves the active speaker — quality endpoint while playing/paused,
-  else whichever speaker is playing, else the last-used speaker (a
-  paused client is indistinguishable from idle, so it is remembered),
-  else any paused speaker. **TVs are always excluded** by entity id.
+  resolves the active speaker — whichever candidate is playing, else
+  the last-used speaker from the memory helper (when set and still a
+  candidate), else the first candidate. **TVs are always excluded**
+  by entity id.
+
+### Active-player memory (optional)
+
+An `input_text` helper holding the entity id of the last-used
+speaker (e.g. `media_player.kitchen`). One knob, several speakers —
+every gesture must resolve to exactly one target, and this box is
+how the knob keeps track of which one you mean. Without it, an idle
+knob always falls back to the first candidate, so a second speaker
+is "forgotten" the moment playback stops.
+
+Two writers, no effort from you. At the end of every gesture run
+the blueprint records the speaker just used — but only while
+*Knob remembers last speaker* is on. Separately, a keeper trigger
+watches every Music Assistant player: the moment one of your
+candidates starts playing from anywhere (phone, voice, routine),
+the first playing candidate is written into the memory. That
+catch-up runs even with the remember switch off, so reaching for
+the knob next always lands on the music. Leave the memory input
+empty to skip the feature entirely.
+
+Each gesture re-resolves fresh, in this order: anything playing
+first (live music beats memory), else the remembered speaker, else
+the first candidate. Setup: create a plain `input_text` helper
+first and pick it in the memory input; leave the remember switch
+off with a single speaker. The box stores the entity id as text —
+rename a speaker and the name goes stale, so clear the box (or fix
+the name) to restore first-candidate fallback.
 - Group players are first-class: volume, seeking and announcements
   target the group; the speaker picker can address the room the knob
   is in instead.
@@ -192,6 +219,8 @@ One automation from
 | `knob_action_topic` | MQTT action topic (`zigbee2mqtt/knob 2/action`) |
 | `mode_select` | Z2M operation-mode select (triple/previous-track dual-edge) |
 | `speaker_source` | `knob_room` (default) / `pick_players` / `pick_group` |
+| `speaker_pick` | Players for Choose-players mode, most-used first (order is the idle fallback order) |
+| `speaker_group` | Speaker-group helper for Choose-a-group mode |
 | `exclude_players` | Entity ids never targeted (TVs) |
 | `seek_latch` | `input_boolean` arming held-turn seek |
 | `last_turn_helper` | `input_datetime` stamped per seek (hold look-back) |
