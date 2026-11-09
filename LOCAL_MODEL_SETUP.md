@@ -64,7 +64,7 @@ Ask for these; each has a fallback the user can accept:
 Give the user one of these two paths:
 
 - **Import link** (easiest): open
-  `https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fraw.githubusercontent.com%2Fkiwipaulrob%2Fma-fav-button%2Fmain%2Fblueprints%2Fautomation%2Fkiwipaulrob%2Fzg101zd_knob_ma_native.yaml`
+  `https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fraw.githubusercontent.com%2Fkiwipaulrob%2Fknobby%2Fmain%2Fblueprints%2Fautomation%2Fkiwipaulrob%2Fzg101zd_knob_ma_native.yaml`
   in a browser and click Import / Preview. (The link must be the raw
   file URL — the normal GitHub page URL serves HTML, not the blueprint.)
 - **Manual**: copy the file into HA at

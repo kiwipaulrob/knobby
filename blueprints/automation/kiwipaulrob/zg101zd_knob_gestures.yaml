@@ -25,7 +25,7 @@ blueprint:
     with voice confirmation, with no relay needed). Kept for wiring
     knob gestures to anything else.
   domain: automation
-  source_url: https://github.com/kiwipaulrob/ma-fav-button/blob/main/blueprints/automation/kiwipaulrob/zg101zd_knob_gestures.yaml
+  source_url: https://github.com/kiwipaulrob/knobby/blob/main/blueprints/automation/kiwipaulrob/zg101zd_knob_gestures.yaml
   input:
     knob_action_topic:
       name: Knob action MQTT topic
