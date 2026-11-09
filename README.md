@@ -181,7 +181,7 @@ engines ignore it. Clear the message, or leave the voice empty, for silence.
 
 ## Reporting a problem
 
-If a gesture misbehaves, reply on the community forum thread with three things and I'll diagnose it fast:
+If a gesture misbehaves, reply on the [community forum thread](https://community.home-assistant.io/t/knobby-zigbee-smart-knob-for-music-assistant-zg-101zd-moes-via-z2m/1033454) with three things and I'll diagnose it fast:
 1. The failed run's trace: open the automation → Traces (top-right) → pick the run → ⋯ → Download trace, and attach the JSON. It shows the trigger, the branch taken, and the exact error — worth more than everything else combined. Grab it before turning the knob again (HA keeps only recent runs).
 2. The error text from Settings → System → Logs.
 3. Your versions (HA, Zigbee2MQTT, Music Assistant, blueprint version line) and what you did vs what you expected.
@@ -190,6 +190,8 @@ If the automation never triggered (no trace exists), give the knob's action sens
 ## Files
 
 - `blueprints/automation/kiwipaulrob/zg101zd_knob_ma_native.yaml` — the blueprint
+- `README-knob.md` — device behaviour, operation-mode action table, and every trap found along the way
+- `LOCAL_MODEL_SETUP.md` — agentic setup playbook (step-by-step script for a local model guiding the user through setup)
 - Playback memory is built into the knob blueprint (memory helper input, any `input_text` name) — no extra file or setup.
 
 ## License
