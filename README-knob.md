@@ -6,9 +6,16 @@ traps, then how the automation is built around them.
 
 ## 1. The device
 
-- **HOBEIAN ZG-101ZD**, a Tuya TS0601-class smart knob, paired via
+- **HOBEIAN ZG-101ZD**, a Tuya **TS004F** smart knob
+  (manufacturer string `_TZ3000_gwkzibhs`), paired via
   **Zigbee2MQTT**. A sibling device (Candeo ERS-10TZBVK-AA) shares the
   same action set and is the better-documented reference.
+- **Firmware: nothing to flash.** The knob reports software build
+  `0125052026` and Z2M reports OTA updates unsupported for it, so
+  there is no vendor image to chase — leave the 24 h OTA check on
+  and move on. Teardown/FCC evidence (FCC ID `2AT8P-SFL02`) shows a
+  `2ANDL-ZS3L` radio module (TLSR8258-based): a sealed, battery-powered
+  design with no user-flashable path.
 - Gestures arrive as **plain-string payloads** on one MQTT topic, e.g.
   `zigbee2mqtt/knob 2/action` with payload `brightness_step_up`.
   The topic carries no JSON envelope — automations can match
@@ -253,7 +260,7 @@ The retired Python relay (`ma-fav-button-relay.py`, `examples/`,
 `tests/test_relay_*.py`) did all of this behind a `rest_command`
 with the brains in hosted code: dumb-pipe HA automations, per-gesture
 `event_type` slots, dry-run testing (`/health`, `"dry_run": true`),
-and the gesture blueprint `zg101zd_knob_gestures.yaml`. It still
+and the gesture wiring example `examples/ma-gesture-wiring.yaml`. It still
 works, but the native blueprint replaces it with one import, no
 hosted code, and the same gestures plus triple-press previous and
 press-and-turn seek. The relay's proportional-voice and dry-run

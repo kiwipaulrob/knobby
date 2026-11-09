@@ -16,6 +16,8 @@ found along the way are documented in [README-knob.md](README-knob.md).
 
 [![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint pre-filled.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fraw.githubusercontent.com%2Fkiwipaulrob%2Fma-fav-button%2Fmain%2Fblueprints%2Fautomation%2Fkiwipaulrob%2Fzg101zd_knob_ma_native.yaml)
 
+*Describes blueprint **Version 1.5** (Nov 2026) — the full changelog lives in the blueprint's own description.*
+
 ## How the volume works
 
 Each rotation detent moves the volume about **1 dB** up or down —
@@ -80,9 +82,11 @@ assign it to the room it lives in. Room mode reads this, so skip it and
 the knob finds no speakers.
 
 **2. Note the knob's action topic.** It looks like
-`zigbee2mqtt/<name>/action` using the name on the knob's Zigbee2MQTT
-device page (spaces become underscores — a knob called "knob" gives
-`zigbee2mqtt/knob/action`). Confirm it: open the knob in the
+`zigbee2mqtt/<name>/action` using the friendly name on the knob's
+Zigbee2MQTT device page exactly as shown — spaces are kept (a knob
+called "knob 2" gives `zigbee2mqtt/knob 2/action`). (The underscores
+in entity ids like `sensor.knob_2_last_action` are Home
+Assistant's doing, not Z2M's.) Confirm it: open the knob in the
 Zigbee2MQTT UI, press/turn it, and watch the Action field under Exposes
 update. (If you changed Z2M's base topic under Settings → MQTT, use
 that instead of `zigbee2mqtt`.) This comes prefilled at import —
@@ -101,7 +105,7 @@ helper → Date and/or time, named e.g. "Knob last turn" — and tick
 **both Date and Time** (HA offers date-only, which silently breaks
 this: a date-only stamp always reads as midnight, so the hold step
 never sees a recent turn and press-and-rotate favourites again).
-The blueprint stamps it on every rotation so a hold arriving just
+The blueprint stamps it on every seek so a hold arriving just
 after turns is recognised as a seek, not a favourite — leave it unset
 and only turns *after* the hold cancel the favourite (the old,
 bug-prone behaviour).
