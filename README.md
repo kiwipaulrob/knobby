@@ -114,6 +114,8 @@ triple-presses), speaker source, the latch helper from step 3 and the
 stamp helper from step 3b (down in Tuning) — plus the memory
 field and remember switch if several speakers share the knob (see below).
 
+![Blueprint form: action topic, operation mode, and speaker pickers](docs/images/setup-form-top.jpg)
+
 **5. Turn it.** Volume should move on the playing speaker immediately —
 no restart needed (Automations → Reload only if you edit later).
 
@@ -127,6 +129,8 @@ voice) is caught automatically — the automation notices and records
 that speaker by itself, even with the remember switch off. One
 speaker? Skip all of this — the fallback already lands correctly.
 
+![Blueprint form: never-pick list, memory, seek latch, and turn stamp](docs/images/setup-helpers.jpg)
+
 **6. (Optional) voice confirmation.** The announce message ships
 prefilled (`Added {song} by {artist} to favourites`); the voice ships
 empty, which means silence — pick a voice and it speaks after each
@@ -134,6 +138,8 @@ favourite, with no pre-announce chime, on the picked speaker or the
 knob's current speaker if that box is empty. A speed slider (0.5×–1.5×,
 natural pace by default) slows or quickens Piper voices — other
 engines ignore it. Clear the message, or leave the voice empty, for silence.
+
+![Blueprint form: position clock and voice announcement settings](docs/images/setup-announce.jpg)
 
 ## Technique and quirks
 
