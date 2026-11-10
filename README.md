@@ -191,7 +191,7 @@ If the automation never triggered (no trace exists), give the knob's action sens
 
 - `blueprints/automation/kiwipaulrob/zg101zd_knob_ma_native.yaml` — the blueprint
 - `README-knob.md` — device behaviour, operation-mode action table, and every trap found along the way
-- `LOCAL_MODEL_SETUP.md` — agentic setup playbook (step-by-step script for a local model guiding the user through setup)
+- `AGENTS.md` — agentic setup playbook (step-by-step script for a local model guiding the user through setup)
 - Playback memory is built into the knob blueprint (memory helper input, any `input_text` name) — no extra file or setup.
 
 ## License
